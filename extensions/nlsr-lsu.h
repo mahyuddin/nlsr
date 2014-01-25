@@ -23,9 +23,7 @@
 #ifndef NLSR_LSU_H
 #define NLSR_LSU_H
 
-#include "ns3/ptr.h"
 #include "ns3/header.h"
-#include "ns3/ndn-data.h"
 
 namespace ns3 {
 namespace nlsr {
@@ -46,7 +44,7 @@ namespace nlsr {
 //                                      prefix: name prefix
 
 // ========== Class LsuNameList ============
-  
+
 class LsuContent : public Header {
 
 public:
@@ -65,26 +63,48 @@ public:
   LsuContent ();
   virtual ~LsuContent ();  
 
-  static TypeId GetTypeId (void);
-  virtual TypeId GetInstanceTypeId (void) const;
-  void Print (std::ostream &os) const;
-  uint32_t GetSerializedSize (void) const;
-  void Serialize (Buffer::Iterator start) const;
-  uint32_t Deserialize (Buffer::Iterator start);
-  uint32_t Deserialize (Buffer::Iterator start, uint32_t messageSize);
+  static TypeId
+  GetTypeId (void);
 
-  uint32_t GetLifetime () const; 
-  void SetLifetime (uint32_t lifetime); 
+  virtual TypeId
+  GetInstanceTypeId (void) const;
+  
+  void
+  Print (std::ostream &os) const;
+  
+  uint32_t
+  GetSerializedSize (void) const;
+  
+  void
+  Serialize (Buffer::Iterator start) const;
+  
+  uint32_t
+  Deserialize (Buffer::Iterator start);
 
-  const std::vector<NeighborTuple> & GetAdjacency () const;
-  void AddAdjacency (const std::string &routerName, uint16_t metric);
+  uint32_t
+  GetLifetime () const; 
+  
+  void
+  SetLifetime (uint32_t lifetime); 
 
-  const std::vector<PrefixTuple> & GetReachability () const;
-  void AddReachability (const std::string &prefixName, uint16_t metric);
+  const std::vector<NeighborTuple> &
+  GetAdjacency () const;
+  
+  void
+  AddAdjacency (const std::string &routerName, uint16_t metric);
+
+  const std::vector<PrefixTuple> &
+  GetReachability () const;
+  
+  void
+  AddReachability (const std::string &prefixName, uint16_t metric);
 
 private:
-  uint16_t GetAdjacencySize (void) const;
-  uint16_t GetReachabilitySize (void) const;
+  uint16_t
+  GetAdjacencySize (void) const;
+
+  uint16_t
+  GetReachabilitySize (void) const;
 
 private:
   uint32_t m_lifetime; // count-down timer for soft-state protocol 
@@ -102,19 +122,94 @@ public:
   LsuNameList ();
   virtual ~LsuNameList ();  
 
-  static TypeId GetTypeId (void);
-  virtual TypeId GetInstanceTypeId (void) const;
-  void Print (std::ostream &os) const;
-  uint32_t GetSerializedSize (void) const;
-  void Serialize (Buffer::Iterator start) const;
-  uint32_t Deserialize (Buffer::Iterator start);
-  uint32_t Deserialize (Buffer::Iterator start, uint32_t messageSize);
+  static TypeId
+  GetTypeId (void);
+  
+  virtual TypeId
+  GetInstanceTypeId (void) const;
+  
+  void
+  Print (std::ostream &os) const;
+  
+  uint32_t
+  GetSerializedSize (void) const;
+  
+  void
+  Serialize (Buffer::Iterator start) const;
+  
+  uint32_t
+  Deserialize (Buffer::Iterator start);
 
-  const std::vector<std::string> & GetNameList () const;
-  void AddNameList (const std::string & lsuName);
+  const std::vector<std::string> &
+  GetNameList () const;
+  
+  void
+  AddNameList (const std::string & lsuName);
 
 private:
   std::vector<std::string> m_nameList;
+
+}; // class LsuNameList
+
+// ========== Class HelloData ============
+  
+class HelloData : public Header {
+
+public:
+
+  HelloData ();
+  virtual ~HelloData ();  
+
+  static TypeId
+  GetTypeId (void);
+  
+  virtual TypeId
+  GetInstanceTypeId (void) const;
+  
+  void
+  Print (std::ostream &os) const;
+  
+  uint32_t
+  GetSerializedSize (void) const;
+  
+  void
+  Serialize (Buffer::Iterator start) const;
+  
+  uint32_t
+  Deserialize (Buffer::Iterator start);
+  
+  uint16_t
+  GetNeighborListSize (void) const;
+
+  const std::string &
+  GetRouterName () const;
+  
+  void
+  SetRouterName (const std::string & routerName);
+
+  const std::vector<std::string> &
+  GetNeighborList () const;
+  
+  void
+  AddNeighborList (const std::string & lsuName);
+
+  uint32_t
+  GetDeadTime () const;
+  
+  void
+  SetDeadTime (const uint32_t & deadTime);
+
+  uint8_t
+  GetVersion () const;
+  
+  void
+  SetVersion (const uint8_t & version);
+
+private:
+  std::string m_routerName;
+  std::vector<std::string> m_neighborList;
+  uint32_t m_deadTime;
+  uint8_t m_version;
 
 }; // class LsuNameList
 
