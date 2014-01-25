@@ -29,6 +29,8 @@ NS_LOG_COMPONENT_DEFINE ("NlsrLsu");
 namespace ns3 {
 namespace nlsr {
 
+// ========== Class LsuContent ============
+
 NS_OBJECT_ENSURE_REGISTERED (LsuContent);
 
 uint16_t
@@ -83,11 +85,15 @@ LsuContent::GetInstanceTypeId (void) const
 uint32_t
 LsuContent::GetSerializedSize (void) const
 {
-  NS_LOG_DEBUG ("GetSerializedSize LsuContent"); 
-
   uint32_t size = 0;
   uint16_t smallSize = 0;
-  size += sizeof (m_lifetime) + sizeof (smallSize) + LsuContent::GetAdjacencySize () + sizeof (smallSize) + LsuContent::GetReachabilitySize(); 
+  size = sizeof (size) + 
+         sizeof (m_lifetime) +
+         sizeof (smallSize) + LsuContent::GetAdjacencySize () +
+         sizeof (smallSize) + LsuContent::GetReachabilitySize(); 
+
+  NS_LOG_DEBUG ("GetSerializedSize LsuContent: " << size); 
+
   return size;
 }
 
@@ -118,6 +124,8 @@ LsuContent::Serialize (Buffer::Iterator start) const
   NS_LOG_DEBUG ("Serialize LsuContent"); 
 
   Buffer::Iterator i = start;
+  i.WriteHtonU32 (GetSerializedSize ());
+
   i.WriteHtonU32 (m_lifetime);
 
   i.WriteHtonU16 (GetAdjacencySize ());
@@ -142,23 +150,27 @@ LsuContent::Serialize (Buffer::Iterator start) const
 uint32_t
 LsuContent::Deserialize (Buffer::Iterator start)
 {
-  NS_LOG_DEBUG ("Deserialize LsuContent 1"); 
+  uint32_t size = start.ReadNtohU32 ();
 
-  return Deserialize (start, start.GetSize ());
+  NS_LOG_DEBUG ("Deserialize LsuContent 1:" << size); 
+
+  size -= sizeof (size);
+
+  return Deserialize (start, size) + sizeof (size);
 }
 
 
 uint32_t
 LsuContent::Deserialize (Buffer::Iterator start, uint32_t messageSize)
 {
-  NS_LOG_DEBUG ("Deserialize LsuContent 2"); 
+  NS_LOG_DEBUG ("Deserialize LsuContent 2: " << messageSize); 
 
   Buffer::Iterator i = start;
+  uint16_t leftSize = messageSize;
 
-  NS_ASSERT (messageSize >= sizeof (m_lifetime));
+  NS_ASSERT (leftSize >= sizeof (m_lifetime));
   m_lifetime = i.ReadNtohU32 ();
- 
-  uint16_t leftSize = messageSize - sizeof (m_lifetime);
+  leftSize -= sizeof (m_lifetime);
 
   NS_ASSERT (leftSize >= sizeof (leftSize));
   uint16_t adjacencySize = i.ReadNtohU16 ();
@@ -222,22 +234,26 @@ LsuContent::Deserialize (Buffer::Iterator start, uint32_t messageSize)
   return messageSize;
 }
 
-uint32_t LsuContent::GetLifetime () const
+uint32_t
+LsuContent::GetLifetime () const
 {
   return m_lifetime;
 } 
 
-void LsuContent::SetLifetime (uint32_t lifetime)
+void
+LsuContent::SetLifetime (uint32_t lifetime)
 {
   m_lifetime = lifetime;
 }
 
-const std::vector<LsuContent::NeighborTuple> & LsuContent::GetAdjacency () const
+const std::vector<LsuContent::NeighborTuple> &
+LsuContent::GetAdjacency () const
 {
   return m_adjacency;
 }
  
-void LsuContent::AddAdjacency (const std::string &routerName, uint16_t metric)
+void
+LsuContent::AddAdjacency (const std::string &routerName, uint16_t metric)
 {
   LsuContent::NeighborTuple neighborTuple;
   neighborTuple.routerName = routerName;
@@ -245,17 +261,148 @@ void LsuContent::AddAdjacency (const std::string &routerName, uint16_t metric)
   m_adjacency.push_back(neighborTuple);
 }
 
-const std::vector<LsuContent::PrefixTuple> & LsuContent::GetReachability () const
+const std::vector<LsuContent::PrefixTuple> & 
+LsuContent::GetReachability () const
 {
   return m_reachability;
 }
  
-void LsuContent::AddReachability (const std::string &prefixName, uint16_t metric)
+void
+LsuContent::AddReachability (const std::string &prefixName, uint16_t metric)
 {
   LsuContent::PrefixTuple prefixTuple;
   prefixTuple.prefixName = prefixName;
   prefixTuple.metric = metric;
   m_reachability.push_back(prefixTuple);
+}
+
+// ========== Class LsuNameList ============
+
+NS_OBJECT_ENSURE_REGISTERED (LsuNameList);
+
+LsuNameList::LsuNameList ()
+{
+}
+
+LsuNameList::~LsuNameList ()
+{
+}
+
+TypeId
+LsuNameList::GetTypeId (void)
+{
+  static TypeId tid = TypeId ("ns3::nlsr::LsuNameList")
+    .SetParent<Header> ()
+    .AddConstructor<LsuNameList> ()
+  ;
+  return tid;
+}
+
+TypeId
+LsuNameList::GetInstanceTypeId (void) const
+{
+  return GetTypeId ();
+}
+
+uint32_t
+LsuNameList::GetSerializedSize (void) const
+{
+  uint32_t size = 0;
+  uint16_t smallSize = 0;
+
+  size += sizeof (size);
+
+  for ( std::vector<std::string>::const_iterator i = m_nameList.begin ();
+        i != m_nameList.end ();
+        i++ ) {
+    size += sizeof (smallSize) + i->size (); 
+  }
+  NS_LOG_DEBUG ("GetSerializedSize LsuNameList: " << size); 
+  return size;
+}
+
+void
+LsuNameList::Print (std::ostream &os) const
+{
+  for ( std::vector<std::string>::const_iterator i = m_nameList.begin ();
+        i != m_nameList.end ();
+        i++ ) {
+    os << "LsuName:  " << i->c_str() << "  Length:  " << i->size () << std::endl;
+  }
+}
+
+void
+LsuNameList::Serialize (Buffer::Iterator start) const
+{
+  Buffer::Iterator i = start;
+  i.WriteHtonU32 (GetSerializedSize ());
+
+  for ( std::vector<std::string>::const_iterator name = m_nameList.begin ();
+        name != m_nameList.end();
+        name++ ) {
+    i.WriteHtonU16 (name->size ());
+    i.Write ((const uint8_t *) name->c_str (), name->size ());
+  }
+}
+
+uint32_t
+LsuNameList::Deserialize (Buffer::Iterator start)
+{
+
+  uint32_t size = start.ReadNtohU32 ();
+
+  NS_LOG_DEBUG ("Deserialize LsuNameList 1:" << size); 
+
+  size -= sizeof (size);
+
+  return Deserialize (start, size) + sizeof (size);
+}
+
+
+uint32_t
+LsuNameList::Deserialize (Buffer::Iterator start, uint32_t messageSize)
+{
+  NS_LOG_DEBUG ("Deserialize LsuNameList 2: " << messageSize); 
+
+  uint32_t leftSize = messageSize;
+  Buffer::Iterator i = start;
+
+  while (leftSize > 0) {
+
+    std::string name;
+    uint16_t stringSize = 0;
+
+    NS_ASSERT (leftSize >= sizeof (stringSize));
+    stringSize = i.ReadNtohU16(); 
+    leftSize -= sizeof (stringSize);
+     
+    NS_LOG_DEBUG ("leftSize: " << leftSize << "  stringSize: " << stringSize);
+
+    NS_ASSERT (leftSize >= stringSize);
+    leftSize -= stringSize;
+    name.clear ();
+    for (; stringSize > 0; stringSize--) {
+      name.push_back (i.ReadU8 ()); 
+    }
+
+    m_nameList.push_back (name);
+  }
+ 
+  NS_ASSERT (leftSize == 0);
+
+  return messageSize;
+}
+
+const std::vector<std::string> &
+LsuNameList::GetNameList () const
+{
+  return m_nameList;
+}
+
+void
+LsuNameList::AddNameList (const std::string &lsuName)
+{
+  m_nameList.push_back(lsuName);
 }
  
 } // namespace nlsr

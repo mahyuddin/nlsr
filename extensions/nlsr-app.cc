@@ -127,11 +127,22 @@ NlsrApp::OnInterest (Ptr<const ndn::Interest> interest)
 
   nlsr::LsuContent lsu;
   lsu.SetLifetime (100);
-  lsu.AddAdjacency ("/router1", 5);
-  lsu.AddReachability ("/router1/data", 5);
+  lsu.AddAdjacency ("/router11", 5);
+  lsu.AddReachability ("/router1/prefix", 5);
+
+  //Ptr<nlsr::LsuContent> lsu = Create<nlsr::LsuContent> ();
+  //lsu->SetLifetime (100);
+  //lsu->AddAdjacency ("/router1", 5);
+  //lsu->AddReachability ("/router1/prefix", 5);
+
+  nlsr::LsuNameList nameList;
+  nameList.AddNameList ("/nlsr/router1/1234");
 
   Ptr<Packet> packet = Create<Packet> ();
   packet->AddHeader (lsu);
+  Ptr<Packet> p2 = Create<Packet> ();
+  p2->AddHeader (nameList);
+  packet->AddAtEnd (p2);
   
   Ptr<ndn::Data> data = Create<ndn::Data> (packet);
   data->SetName (Create<ndn::NameComponents> (interest->GetName ())); // data will have the same name as Interests
@@ -161,6 +172,9 @@ NlsrApp::OnData (Ptr<const ndn::Data> data)
   payload->RemoveHeader (lsu);
   lsu.Print(std::cout);
 
+  nlsr::LsuNameList nameList;
+  payload->RemoveHeader (nameList);
+  nameList.Print(std::cout);
 }
 
 } // namespace nlsr

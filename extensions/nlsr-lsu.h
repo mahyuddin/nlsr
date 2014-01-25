@@ -6,7 +6,7 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation;
  *
- * This program is distributed in the hope that it will be useful,
+ * This program is distributed in the hope tha t it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
@@ -45,6 +45,8 @@ namespace nlsr {
 //   reachability of prefix (optional): <prefix, metric>*
 //                                      prefix: name prefix
 
+// ========== Class LsuNameList ============
+  
 class LsuContent : public Header {
 
 public:
@@ -90,7 +92,32 @@ private:
   std::vector<PrefixTuple> m_reachability;
 
 }; // class LsuContent
+
+// ========== Class LsuNameList ============
   
+class LsuNameList : public Header {
+
+public:
+
+  LsuNameList ();
+  virtual ~LsuNameList ();  
+
+  static TypeId GetTypeId (void);
+  virtual TypeId GetInstanceTypeId (void) const;
+  void Print (std::ostream &os) const;
+  uint32_t GetSerializedSize (void) const;
+  void Serialize (Buffer::Iterator start) const;
+  uint32_t Deserialize (Buffer::Iterator start);
+  uint32_t Deserialize (Buffer::Iterator start, uint32_t messageSize);
+
+  const std::vector<std::string> & GetNameList () const;
+  void AddNameList (const std::string & lsuName);
+
+private:
+  std::vector<std::string> m_nameList;
+
+}; // class LsuNameList
+
 } // namespace nlsr
 } // namespace ns3
 
