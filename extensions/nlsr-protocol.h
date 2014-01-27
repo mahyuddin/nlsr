@@ -18,26 +18,48 @@
  * Author: Yu Zhang <yuzhang@hit.edu.cn> 
  */
 
-// nlsr-lsu.h
+// nlsr-protocol.h
 
-#ifndef NLSR_SYNC_H
-#define NLSR_SYNC_H
+#ifndef NLSR_PROTOCOL_H
+#define NLSR_PROTOCOL_H
 
-#include "ns3/ptr.h"
+#include "nlsr-state.h"
 #include "ns3/header.h"
+#include "ns3/ptr.h"
+#include "ns3/ndn-interest.h"
 #include "ns3/ndn-data.h"
 
 namespace ns3 {
 namespace nlsr {
 
-// LSU Name: /nlsr/<router>/<lsu>/<seq#>
-//   lsu: a number/string
-//   Seq#: timestamp (ms, unix_time) + #
-//         timestamp is against replay attack
-//
+/// ========== Class NlsrProtcol ============
 
+class NlsrProtocol {
+  
+public:
+  NlsrProtocol ();
+  
+  virtual
+  ~NlsrProtocol ();  
+
+  static TypeId
+  GetTypeId (void);
+
+  virtual TypeId
+  GetInstanceTypeId (void) const;
+
+  static const Ptr<ndn::Interest>
+  BuildSyncInterestWithDigest (uint64_t digest);
+
+  static uint64_t
+  GetDigestFromSyncInterest (Ptr<const ndn::Interest> syncInterest);
+
+private:
+  LocalProtocolState m_localProtocolState;
+
+};
 
 } // namespace nlsr
 } // namespace ns3
 
-#endif /* NLSR_SYNC_H */
+#endif /* NLSR_PROTOCOL_H */

@@ -45,19 +45,33 @@ namespace nlsr {
 
 // ========== Class LsuNameList ============
 
-class LsuContent : public Header {
+class LsuContent : public Header, public SimpleRefCount<LsuContent> {
 
 public:
   struct NeighborTuple
   {
     std::string routerName;
     uint16_t metric;
+
+    NeighborTuple ()
+    {}
+
+    NeighborTuple (std::string n, uint16_t m)
+    : routerName (n), metric (m)
+    {}
   };
 
   struct PrefixTuple
   {
     std::string prefixName;
     uint16_t metric;
+
+    PrefixTuple ()
+    {}
+
+    PrefixTuple (std::string n, uint16_t m)
+    : prefixName (n), metric (m)
+    {}
   };
 
   LsuContent ();
@@ -115,7 +129,7 @@ private:
 
 // ========== Class LsuNameList ============
   
-class LsuNameList : public Header {
+class LsuNameList : public Header, public SimpleRefCount<LsuContent> {
 
 public:
 
@@ -144,7 +158,7 @@ public:
   GetNameList () const;
   
   void
-  AddNameList (const std::string & lsuName);
+  AddName (const std::string & lsuName);
 
 private:
   std::vector<std::string> m_nameList;
@@ -153,7 +167,7 @@ private:
 
 // ========== Class HelloData ============
   
-class HelloData : public Header {
+class HelloData : public Header, public SimpleRefCount<HelloData> {
 
 public:
 

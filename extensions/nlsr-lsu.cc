@@ -100,6 +100,7 @@ LsuContent::GetSerializedSize (void) const
 void
 LsuContent::Print (std::ostream &os) const
 {
+  os << "=== LsuContent ===" << std::endl;
   os << "Lifetime:  " << m_lifetime << std::endl;
   os << "AdjacencySize:  " << GetAdjacencySize () << std::endl;
   for ( std::vector<nlsr::LsuContent::NeighborTuple>::const_iterator neighborTuple = m_adjacency.begin ();
@@ -121,8 +122,6 @@ LsuContent::Print (std::ostream &os) const
 void
 LsuContent::Serialize (Buffer::Iterator start) const
 {
-  NS_LOG_DEBUG ("Serialize LsuContent"); 
-
   Buffer::Iterator i = start;
   i.WriteHtonU32 (GetSerializedSize () - sizeof (uint32_t));
 
@@ -152,7 +151,7 @@ LsuContent::Deserialize (Buffer::Iterator start)
 {
   uint32_t messageSize = start.ReadNtohU32 ();
 
-  NS_LOG_DEBUG ("Deserialize LsuContent:" << messageSize); 
+  //NS_LOG_DEBUG ("Deserialize LsuContent:" << messageSize); 
 
   uint32_t leftSize = messageSize;
   Buffer::Iterator i = start;
@@ -162,7 +161,7 @@ LsuContent::Deserialize (Buffer::Iterator start)
   leftSize -= sizeof (m_lifetime);
 
   uint16_t adjacencySize = i.ReadNtohU16 ();
-  NS_LOG_DEBUG ("adjacencySize: " << adjacencySize << "  leftSize: " << leftSize); 
+  //NS_LOG_DEBUG ("adjacencySize: " << adjacencySize << "  leftSize: " << leftSize); 
 
   leftSize -= sizeof (adjacencySize);
   NS_ASSERT (leftSize >= adjacencySize);
@@ -194,7 +193,7 @@ LsuContent::Deserialize (Buffer::Iterator start)
  
   NS_ASSERT (leftSize >= sizeof (leftSize));
   uint16_t reachabilitySize = i.ReadNtohU16 ();
-  NS_LOG_DEBUG ("reachabilitySize: " << reachabilitySize << "  leftSize: " << leftSize); 
+  //NS_LOG_DEBUG ("reachabilitySize: " << reachabilitySize << "  leftSize: " << leftSize); 
 
   leftSize -= sizeof (reachabilitySize);
   NS_ASSERT (leftSize >= reachabilitySize);
@@ -248,9 +247,7 @@ LsuContent::GetAdjacency () const
 void
 LsuContent::AddAdjacency (const std::string &routerName, uint16_t metric)
 {
-  LsuContent::NeighborTuple neighborTuple;
-  neighborTuple.routerName = routerName;
-  neighborTuple.metric = metric;
+  NeighborTuple neighborTuple (routerName, metric);
   m_adjacency.push_back(neighborTuple);
 }
 
@@ -263,9 +260,7 @@ LsuContent::GetReachability () const
 void
 LsuContent::AddReachability (const std::string &prefixName, uint16_t metric)
 {
-  LsuContent::PrefixTuple prefixTuple;
-  prefixTuple.prefixName = prefixName;
-  prefixTuple.metric = metric;
+  PrefixTuple prefixTuple (prefixName, metric);
   m_reachability.push_back(prefixTuple);
 }
 
@@ -317,6 +312,7 @@ LsuNameList::GetSerializedSize (void) const
 void
 LsuNameList::Print (std::ostream &os) const
 {
+  os << "=== LsuNameList ===" << std::endl;
   for ( std::vector<std::string>::const_iterator i = m_nameList.begin ();
         i != m_nameList.end ();
         i++ ) {
@@ -344,7 +340,7 @@ LsuNameList::Deserialize (Buffer::Iterator start)
 
   uint32_t messageSize = start.ReadNtohU32 ();
 
-  NS_LOG_DEBUG ("Deserialize LsuNameList 1:" << messageSize); 
+  //NS_LOG_DEBUG ("Deserialize LsuNameList 1:" << messageSize); 
 
   uint32_t leftSize = messageSize;
   Buffer::Iterator i = start;
@@ -358,7 +354,7 @@ LsuNameList::Deserialize (Buffer::Iterator start)
     stringSize = i.ReadNtohU16(); 
     leftSize -= sizeof (stringSize);
      
-    NS_LOG_DEBUG ("leftSize: " << leftSize << "  stringSize: " << stringSize);
+    //NS_LOG_DEBUG ("leftSize: " << leftSize << "  stringSize: " << stringSize);
 
     NS_ASSERT (leftSize >= stringSize);
     leftSize -= stringSize;
@@ -382,7 +378,7 @@ LsuNameList::GetNameList () const
 }
 
 void
-LsuNameList::AddNameList (const std::string &lsuName)
+LsuNameList::AddName (const std::string &lsuName)
 {
   m_nameList.push_back(lsuName);
 }
@@ -404,7 +400,7 @@ HelloData::GetTypeId (void)
 {
   static TypeId tid = TypeId ("ns3::nlsr::HelloData")
     .SetParent<Header> ()
-    .AddConstructor<LsuNameList> ()
+    .AddConstructor<HelloData> ()
   ;
   return tid;
 }
@@ -450,6 +446,7 @@ HelloData::GetSerializedSize (void) const
 void
 HelloData::Print (std::ostream &os) const
 {
+  os << "=== HelloData ===" << std::endl;
   os << "RouterName:  " << m_routerName << std::endl;
 
   for ( std::vector<std::string>::const_iterator i = m_neighborList.begin ();
@@ -488,20 +485,19 @@ HelloData::Deserialize (Buffer::Iterator start)
 
   uint32_t messageSize = start.ReadNtohU32 ();
 
-  NS_LOG_DEBUG ("Deserialize HelloData:" << messageSize); 
+  //NS_LOG_DEBUG ("Deserialize HelloData:" << messageSize); 
 
   uint32_t leftSize = messageSize;
   Buffer::Iterator i = start;
 
   uint16_t nameSize = 0;
   nameSize = i.ReadNtohU16 ();
-  NS_LOG_DEBUG ("leftSize: " << leftSize << "  nameSize: " << nameSize);
+  //NS_LOG_DEBUG ("leftSize: " << leftSize << "  nameSize: " << nameSize);
   leftSize -= (sizeof (uint16_t) + nameSize);
 
   for (; nameSize > 0; nameSize--) {
       m_routerName.push_back (i.ReadU8 ()); 
   }
-  NS_LOG_DEBUG ("routerName: " << m_routerName);
    
   uint16_t neighborListSize = i.ReadNtohU16 ();
   leftSize -= ( sizeof (uint16_t) + neighborListSize );
@@ -514,7 +510,7 @@ HelloData::Deserialize (Buffer::Iterator start)
     NS_ASSERT (neighborListSize >= sizeof (stringSize));
     stringSize = i.ReadNtohU16 (); 
     neighborListSize -= sizeof (stringSize);
-    NS_LOG_DEBUG ("neighborListSize: " << neighborListSize << "  stringSize: " << stringSize);
+    //NS_LOG_DEBUG ("neighborListSize: " << neighborListSize << "  stringSize: " << stringSize);
      
     NS_ASSERT (neighborListSize >= stringSize);
     neighborListSize -= stringSize;

@@ -18,18 +18,19 @@
  * Author: Yu Zhang <yuzhang@hit.edu.cn> 
  */
 
-// nlsr-lsu.h
+// nlsr-lsdb.cc
 
-#include "nlsr-lsu.h"
+#include "nlsr-lsdb.h"
 #include "ns3/assert.h"
 #include "ns3/log.h"
 
-NS_LOG_COMPONENT_DEFINE ("NlsrSync");
+NS_LOG_COMPONENT_DEFINE ("NlsrLsdb");
 
 namespace ns3 {
 namespace nlsr {
 
-// ========== Class LsuContent ============
+// ========== Class UpdateLog ============
+
 
 } // namespace nlsr
 } // namespace ns3

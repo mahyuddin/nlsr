@@ -21,7 +21,7 @@
 // nlsr-app.cc
 
 #include "nlsr-app.h"
-#include "nlsr-lsu.h"
+#include "nlsr-protocol.h"
 #include "ns3/ptr.h"
 #include "ns3/log.h"
 #include "ns3/simulator.h"
@@ -88,24 +88,9 @@ NlsrApp::StopApplication ()
 void
 NlsrApp::SendInterest ()
 {
-  /////////////////////////////////////
-  // Sending one Interest packet out //
-  /////////////////////////////////////
-  
-  Ptr<ndn::Name> prefix = Create<ndn::Name> ("/nlsr/sync"); // another way to create name
+  const Ptr<ndn::Interest> interest = nlsr::NlsrProtocol::BuildSyncInterestWithDigest (ns3::Hash64("123"));
 
-  // Create and configure ndn::InterestHeader
-  Ptr<ndn::Interest> interest = Create<ndn::Interest> ();
-  UniformVariable rand (0,std::numeric_limits<uint32_t>::max ());
-  interest->SetNonce            (rand.GetValue ());
-
-  // append digest to prefix
-  prefix->appendNumber (ns3::Hash64("123"));
-
-  interest->SetName             (prefix);
-  interest->SetInterestLifetime (Seconds (1.0));
-
-  NS_LOG_DEBUG ("Sending Interest packet for " << *prefix);
+  NS_LOG_DEBUG ("Sending Sync Interest with digest " << ns3::Hash64("123"));
   
   // Forward packet to lower (network) layer
   Simulator::ScheduleNow (&ndn::Face::ReceiveInterest, m_face, interest);
@@ -125,33 +110,21 @@ NlsrApp::OnInterest (Ptr<const ndn::Interest> interest)
 
   // Note that Interests send out by the app will not be sent back to the app !
 
-  nlsr::LsuContent lsu;
-  lsu.SetLifetime (100);
-  lsu.AddAdjacency ("/router11", 5);
-  lsu.AddReachability ("/router1/prefix", 5);
+  uint64_t digest = NlsrProtocol::GetDigestFromSyncInterest (interest);
+  NS_LOG_DEBUG ("Receive Sync Digest " << digest);
 
-  nlsr::LsuNameList nameList;
-  nameList.AddNameList ("/nlsr/router1/1234");
 
-  nlsr::HelloData helloData;
-  helloData.SetRouterName ("/router1/hello");
-  helloData.AddNeighborList ("/router2");
-  helloData.SetDeadTime (999);
-  helloData.SetVersion (22);
+  Ptr<nlsr::LsuNameList> nameList = Create<nlsr::LsuNameList> ();
+  nameList->AddName ("/nlsr/router1/1234");
+  nameList->AddName ("/nlsr/router2/1234");
 
   Ptr<Packet> packet = Create<Packet> ();
-  packet->AddHeader (lsu);
-  Ptr<Packet> p2 = Create<Packet> ();
-  p2->AddHeader (nameList);
-  Ptr<Packet> p3 = Create<Packet> ();
-  p3->AddHeader (helloData);
+  packet->AddHeader (*nameList);
 
-  packet->AddAtEnd (p2);
-  packet->AddAtEnd (p3);
   
   Ptr<ndn::Data> data = Create<ndn::Data> (packet);
   data->SetName (Create<ndn::NameComponents> (interest->GetName ())); // data will have the same name as Interests
-  
+
   NS_LOG_DEBUG ("Sending ContentObject packet for " << data->GetName ());
 
   // Forward packet to lower (network) layer
@@ -173,17 +146,17 @@ NlsrApp::OnData (Ptr<const ndn::Data> data)
   
   std::cout << "Content Size is " << payload->GetSize () << std::endl;
 
-  nlsr::LsuContent lsu;
-  payload->RemoveHeader (lsu);
-  lsu.Print(std::cout);
+  // nlsr::LsuContent lsu;
+  // payload->RemoveHeader (lsu);
+  // lsu.Print(std::cout);
 
   nlsr::LsuNameList nameList;
   payload->RemoveHeader (nameList);
   nameList.Print(std::cout);
 
-  nlsr::HelloData helloData;
-  payload->RemoveHeader (helloData);
-  helloData.Print(std::cout);
+  // nlsr::HelloData helloData;
+  // payload->RemoveHeader (helloData);
+  // helloData.Print(std::cout);
 }
 
 } // namespace nlsr

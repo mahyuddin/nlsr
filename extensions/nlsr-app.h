@@ -23,6 +23,7 @@
 #ifndef NLSR_APP_H_
 #define NLSR_APP_H_
 
+#include "nlsr-protocol.h"
 #include "ns3/ndn-app.h"
 
 namespace ns3 {
@@ -64,6 +65,9 @@ public:
 private:
   void
   SendInterest ();
+
+private:
+  nlsr::NlsrProtocol m_nlsrProtocol;
 
 };
 
