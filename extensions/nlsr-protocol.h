@@ -34,7 +34,7 @@ namespace nlsr {
 
 /// ========== Class NlsrProtcol ============
 
-class NlsrProtocol : public LocalProtocolState {
+class NlsrProtocol : public NlsrState {
   
 public:
   NlsrProtocol ();

@@ -29,38 +29,38 @@ NS_LOG_COMPONENT_DEFINE ("NlsrState");
 namespace ns3 {
 namespace nlsr {
 
-// ========== Class LocalProtocolState ============
+// ========== Class NlsrState ============
 
-LocalProtocolState::LocalProtocolState ()
+NlsrState::NlsrState ()
 { 
   // std::string name;
   // LsuIdSeqToName ("/router1/lsu1", 1, name);
   // LogTuple logTuple (3428090803022502957, name);
   // m_digestLog.push_front (logTuple);
-  // NS_LOG_DEBUG ("Initial LocalProtocolState");
-  InsertNewLsu ("/router1/lsu1/%01", 0);
-  InsertNewLsu ("/router1/lsu2/%02", 0);
+  // NS_LOG_DEBUG ("Initial NlsrState");
+  //InsertNewLsu ("/router1/lsu1/%01", 0);
+  //InsertNewLsu ("/router1/lsu2/%02", 0);
 }
 
-LocalProtocolState::~LocalProtocolState ()
+NlsrState::~NlsrState ()
 {
 }
 
 TypeId
-LocalProtocolState::GetTypeId (void)
+NlsrState::GetTypeId (void)
 {
-  static TypeId tid = TypeId ("ns3::nlsr::LocalProtocolState");
+  static TypeId tid = TypeId ("ns3::nlsr::NlsrState");
   return tid;
 }
 
 TypeId
-LocalProtocolState::GetInstanceTypeId (void) const
+NlsrState::GetInstanceTypeId (void) const
 {
   return GetTypeId ();
 }
 
 uint64_t
-LocalProtocolState::GetCurrentDigest () const
+NlsrState::GetCurrentDigest () const
 {
   //NS_ASSERT (m_digestLog.front ().digest);
   //NS_LOG_DEBUG ("Digest: " << m_digestLog.front ().digest);
@@ -68,13 +68,13 @@ LocalProtocolState::GetCurrentDigest () const
 }
 
 bool
-LocalProtocolState::IsCurrentDigest (uint64_t digest) const
+NlsrState::IsCurrentDigest (uint64_t digest) const
 {
   return (digest == GetCurrentDigest () ? true : false);
 }
 
 std::string &
-LocalProtocolState::LsuIdSeqToName (const std::string lsuId, uint64_t sequenceNumber, std::string & name)
+NlsrState::LsuIdSeqToName (const std::string lsuId, uint64_t sequenceNumber, std::string & name)
 {
   Ptr<ndn::Name> s = Create<ndn::Name> (lsuId);
   s->appendNumber (sequenceNumber);
@@ -84,7 +84,7 @@ LocalProtocolState::LsuIdSeqToName (const std::string lsuId, uint64_t sequenceNu
 }
 
 std::string &
-LocalProtocolState::LsuNameToIdSeq (const std::string lsuName, std::string & lsuId, uint64_t & sequenceNumber)
+NlsrState::LsuNameToIdSeq (const std::string lsuName, std::string & lsuId, uint64_t & sequenceNumber)
 {
   Ptr<ndn::Name> name = Create<ndn::Name> (lsuName);
   //NS_LOG_DEBUG ("lsuName: " << lsuName);
@@ -96,7 +96,7 @@ LocalProtocolState::LsuNameToIdSeq (const std::string lsuName, std::string & lsu
 }
 
 void
-LocalProtocolState::AddToLog (uint64_t digest, const std::string & lsuName)
+NlsrState::AddToLog (uint64_t digest, const std::string & lsuName)
 {
   LogTuple logTuple (digest, lsuName);
   m_digestLog.push_front (logTuple);
@@ -107,7 +107,7 @@ LocalProtocolState::AddToLog (uint64_t digest, const std::string & lsuName)
 }
 
 bool
-LocalProtocolState::IsDigestInLog (uint64_t digest) const
+NlsrState::IsDigestInLog (uint64_t digest) const
 {
   for (std::list<LogTuple>::const_iterator i = m_digestLog.begin ();
        i != m_digestLog.end ();
@@ -121,7 +121,7 @@ LocalProtocolState::IsDigestInLog (uint64_t digest) const
 }
 
 bool
-LocalProtocolState::GetUpdateSinceThen (uint64_t digest, Ptr<LsuNameList> lsuNameList) const
+NlsrState::GetUpdateSinceThen (uint64_t digest, Ptr<LsuNameList> lsuNameList) const
 {
   for (std::list<LogTuple>::const_iterator i = m_digestLog.begin ();
        i != m_digestLog.end ();
@@ -137,7 +137,7 @@ LocalProtocolState::GetUpdateSinceThen (uint64_t digest, Ptr<LsuNameList> lsuNam
 }
 
 uint64_t
-LocalProtocolState::IncrementalHash (const std::string & newName, const std::string & oldName) const
+NlsrState::IncrementalHash (const std::string & newName, const std::string & oldName) const
 {
   if (oldName == "") {
     return GetCurrentDigest() | ns3::Hash64(newName);
@@ -147,7 +147,7 @@ LocalProtocolState::IncrementalHash (const std::string & newName, const std::str
 }
 
 bool
-LocalProtocolState::IsNewerLsuName (const std::string & lsuName) const
+NlsrState::IsNewerLsuName (const std::string & lsuName) const
 {
   NS_LOG_DEBUG ("Test string: " << lsuName);
   std::string lsuId;
@@ -165,7 +165,7 @@ LocalProtocolState::IsNewerLsuName (const std::string & lsuName) const
 }
 
 void
-LocalProtocolState::NewerLsuNameFilter (const std::vector<std::string> & inLsuNameList, std::vector<std::string> & outLsuNameList) const
+NlsrState::NewerLsuNameFilter (const std::vector<std::string> & inLsuNameList, std::vector<std::string> & outLsuNameList) const
 {
   for (std::vector<std::string>::const_iterator i = inLsuNameList.begin ();
        i != inLsuNameList.end ();
@@ -179,7 +179,7 @@ LocalProtocolState::NewerLsuNameFilter (const std::vector<std::string> & inLsuNa
 }
 
 bool
-LocalProtocolState::InsertInLsuIdSeqMap (const std::string & lsuName, std::string & oldName)
+NlsrState::InsertInLsuIdSeqMap (const std::string & lsuName, std::string & oldName)
 {
   std::string lsuId;
   uint64_t seq;
@@ -200,21 +200,21 @@ LocalProtocolState::InsertInLsuIdSeqMap (const std::string & lsuName, std::strin
 }
 
 void
-LocalProtocolState::AddLsuContent (Ptr<const LsuContent> content)
+NlsrState::AddLsuContent (Ptr<const LsuContent> content)
 {
   const std::vector<LsuContent::NeighborTuple> & adjacency = content->GetAdjacency ();
   const std::vector<LsuContent::PrefixTuple> & reachability = content->GetReachability ();
 }
 
 void
-LocalProtocolState::RemoveLsuContent (Ptr<const LsuContent> content)
+NlsrState::RemoveLsuContent (Ptr<const LsuContent> content)
 {
   const std::vector<LsuContent::NeighborTuple> & adjacency = content->GetAdjacency ();
   const std::vector<LsuContent::PrefixTuple> & reachability = content->GetReachability ();
 }
 
 bool
-LocalProtocolState::InsertNewLsu (const std::string & lsuName, Ptr<const LsuContent> newContent)
+NlsrState::InsertNewLsu (const std::string & lsuName, Ptr<const LsuContent> newContent)
 {
   std::string oldName = "";
   NS_LOG_DEBUG ("lsuName: " << lsuName);
@@ -234,7 +234,7 @@ LocalProtocolState::InsertNewLsu (const std::string & lsuName, Ptr<const LsuCont
 }
 
 void
-LocalProtocolState::GetAllLsuName (Ptr<LsuNameList> lsuNameList) const
+NlsrState::GetAllLsuName (Ptr<LsuNameList> lsuNameList) const
 {
   for (std::map<std::string, Ptr<const LsuContent> >::const_iterator i = m_lsdb.begin ();
        i != m_lsdb.end ();
@@ -245,13 +245,25 @@ LocalProtocolState::GetAllLsuName (Ptr<LsuNameList> lsuNameList) const
 }
 
 Ptr<const LsuContent>
-LocalProtocolState::GetLsuContent (const std::string & lsuName) const
+NlsrState::GetLsuContent (const std::string & lsuName) const
 {
   if (IsNewerLsuName (lsuName)) {
     return 0;
   } else {
     return m_lsdb.find (lsuName)->second;
   }
+}
+
+const std::string &
+NlsrState::GetRouterName () const
+{
+  return m_routerName;
+}
+
+void
+NlsrState::SetRouterName (const std::string & routerName)
+{
+  m_routerName = routerName;
 }
 
 } // namespace nlsr

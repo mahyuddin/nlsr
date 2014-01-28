@@ -57,7 +57,7 @@ NlsrProtocol::GetInstanceTypeId (void) const
 const Ptr<ndn::Interest>
 NlsrProtocol::BuildSyncInterestWithDigest (uint64_t digest)
 {
-  NS_LOG_DEBUG ("");
+  //NS_LOG_DEBUG ("");
 
   Ptr<ndn::Name> prefix = Create<ndn::Name> ("/nlsr/sync");
   // append digest to prefix

@@ -39,7 +39,7 @@ namespace nlsr {
  *
  * When an Interest is received, it is replied with a ContentObject with 1024-byte fake payload
  */
-class NlsrApp : public ndn::App
+class NlsrApp : public ndn::App, NlsrProtocol
 {
 public:
   // register NS-3 type "NlsrApp"
@@ -66,8 +66,12 @@ private:
   void
   SendInterest ();
 
+  void
+  NewUpdate ();
+
 private:
-  nlsr::NlsrProtocol m_nlsr;
+  std::string routerName;
+  uint64_t m_seq = 1;
 
 };
 

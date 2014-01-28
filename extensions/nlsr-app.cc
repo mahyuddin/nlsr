@@ -61,11 +61,7 @@ NlsrApp::StartApplication ()
   ndn::App::StartApplication ();
 
   // Create a name components object for name ``/prefix/sub``
-  Ptr<ndn::Name> prefix = Create<ndn::Name> ("/nlsr"); // now prefix contains ``/``
-
-  /////////////////////////////////////////////////////////////////////////////
-  // Creating FIB entry that ensures that we will receive incoming Interests //
-  /////////////////////////////////////////////////////////////////////////////
+  Ptr<ndn::Name> prefix = Create<ndn::Name> ("/"); // now prefix contains ``/``
 
   // Get FIB object
   Ptr<ndn::Fib> fib = GetNode ()->GetObject<ndn::Fib> ();
@@ -74,7 +70,22 @@ NlsrApp::StartApplication ()
   // Note that ``m_face`` is cretaed by ndn::App
   Ptr<ndn::fib::Entry> fibEntry = fib->Add (*prefix, m_face, 0);
 
-  Simulator::Schedule (Seconds (0.0), &NlsrApp::SendInterest, this);
+  std::stringstream ss;
+  ss << GetNode ()-> GetId ();
+  SetRouterName ("router-" +  ss.str());
+  NS_LOG_DEBUG ("Starting ... Router: " << GetRouterName ());
+  Simulator::Schedule (Seconds (0.0), &NlsrApp::NewUpdate, this);
+  Simulator::Schedule (Seconds (0.1), &NlsrApp::SendInterest, this);
+}
+
+void
+NlsrApp::NewUpdate ()
+{
+  std::string s;
+  LsuIdSeqToName ("/" + GetRouterName () + "/lsu1" , m_seq++, s);
+  InsertNewLsu (s, 0);
+  NS_LOG_DEBUG ("New Updates: " << s);
+  Simulator::Schedule (Seconds (0.3), &NlsrApp::NewUpdate, this);
 }
 
 // Processing when application is stopped
@@ -89,13 +100,17 @@ void
 NlsrApp::SendInterest ()
 {
   //const Ptr<ndn::Interest> interest = nlsr::NlsrProtocol::BuildSyncInterestWithDigest (m_nlsr.GetCurrentDigest ());
-  const Ptr<ndn::Interest> interest = nlsr::NlsrProtocol::BuildSyncInterestWithDigest (ns3::Hash64 ("/nlsr/resync"));
+  //uint64_t digest = GetCurrentDigest ();
+  uint64_t digest = ns3::Hash64("/nlsr/resync");
 
-  //NS_LOG_DEBUG ("Sending Sync Interest with digest " << ns3::Hash64("123"));
+  const Ptr<ndn::Interest> interest = BuildSyncInterestWithDigest (digest);
+
+  NS_LOG_DEBUG ("Sending Sync Interest with digest " << digest);
   
   // Forward packet to lower (network) layer
   Simulator::ScheduleNow (&ndn::Face::ReceiveInterest, m_face, interest);
 
+  Simulator::Schedule (Seconds (1.0), &NlsrApp::SendInterest, this);
   // Call trace (for logging purposes)
   m_transmittedInterests (interest, this, m_face);
 }
@@ -111,7 +126,7 @@ NlsrApp::OnInterest (Ptr<const ndn::Interest> interest)
 
   // Note that Interests send out by the app will not be sent back to the app !
 
-  Ptr<ndn::Data> data = m_nlsr.ProcessSyncInterest (interest);
+  Ptr<ndn::Data> data = ProcessSyncInterest (interest);
 
   // Ptr<nlsr::LsuNameList> nameList = Create<nlsr::LsuNameList> ();
   // nameList->AddName ("/nlsr/router1/1234");
@@ -153,7 +168,7 @@ NlsrApp::OnData (Ptr<const ndn::Data> data)
   // payload->RemoveHeader (nameList);
   // nameList.Print(std::cout);
 
-  m_nlsr.ProcessSyncData (data);
+  ProcessSyncData (data);
 
   // nlsr::HelloData helloData;
   // payload->RemoveHeader (helloData);

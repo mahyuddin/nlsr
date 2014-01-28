@@ -30,9 +30,9 @@
 namespace ns3 {
 namespace nlsr {
 
-/// ========== Class LocalProtocolState ============
+/// ========== Class NlsrState ============
 
-class LocalProtocolState {
+class NlsrState {
 
   struct LogTuple
   {
@@ -65,9 +65,9 @@ class LocalProtocolState {
 
 public:
 
-  LocalProtocolState ();
+  NlsrState ();
 
-  virtual ~LocalProtocolState ();
+  virtual ~NlsrState ();
 
   static TypeId
   GetTypeId (void);
@@ -126,13 +126,20 @@ public:
   Ptr<const LsuContent>
   GetLsuContent (const std::string & lsuName) const;
 
+  const std::string &
+  GetRouterName () const;
+
+  void
+  SetRouterName (const std::string & routerName);
+
 private:
   std::list<LogTuple> m_digestLog;
   std::map<std::string, uint64_t> m_lsuIdSeqMap;
   std::map<std::string, Ptr<const LsuContent> > m_lsdb;
   std::vector<AdjacencyTuple> m_adjacency;
   std::vector<ReachabilityTuple> m_reachability;
-}; // Class LocalProtocolState
+  std::string m_routerName;
+}; // Class NlsrState
 
 
 } // namespace nlsr
