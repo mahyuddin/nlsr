@@ -34,7 +34,7 @@ namespace nlsr {
 
 /// ========== Class NlsrProtcol ============
 
-class NlsrProtocol {
+class NlsrProtocol : public LocalProtocolState {
   
 public:
   NlsrProtocol ();
@@ -51,11 +51,11 @@ public:
   static const Ptr<ndn::Interest>
   BuildSyncInterestWithDigest (uint64_t digest);
 
-  static uint64_t
-  GetDigestFromSyncInterest (Ptr<const ndn::Interest> syncInterest);
+  Ptr<ndn::Data>
+  ProcessSyncInterest (Ptr<const ndn::Interest> syncInterest);
 
-private:
-  LocalProtocolState m_localProtocolState;
+  void
+  ProcessSyncData (Ptr<const ndn::Data> syncData);
 
 };
 

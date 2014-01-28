@@ -67,7 +67,7 @@ private:
   SendInterest ();
 
 private:
-  nlsr::NlsrProtocol m_nlsrProtocol;
+  nlsr::NlsrProtocol m_nlsr;
 
 };
 

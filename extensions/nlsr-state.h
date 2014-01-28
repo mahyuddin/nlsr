@@ -47,12 +47,6 @@ class LocalProtocolState {
     {}
   };
 
-  struct LsuTuple
-  {
-    uint32_t sequenceNumber;
-    Ptr<const LsuContent> lsuContent;
-  };
-
   struct AdjacencyTuple
   {
     std::string router1;
@@ -84,26 +78,58 @@ public:
   uint64_t
   GetCurrentDigest () const;
 
+  static std::string &
+  LsuIdSeqToName (const std::string lsuId, uint64_t sequenceNumber, std::string & str);
+
+  static std::string &
+  LsuNameToIdSeq (const std::string lsuName, std::string & lsuId, uint64_t & sequenceNumber);
+
   void
   AddToLog (uint64_t digest, const std::string & lsuName);
 
   bool
+  IsCurrentDigest (uint64_t digest) const;
+
+  bool
   IsDigestInLog (uint64_t digest) const;
+
+  uint64_t
+  IncrementalHash (const std::string & newName, const std::string & oldName) const;
 
   bool
   GetUpdateSinceThen (uint64_t digest, Ptr<LsuNameList> lsuNameList) const;
 
   bool
-  ReplaceInLsdb (const std::string & lsuName, 
-                 uint32_t newNumber, Ptr<const LsuContent> newContent,
-                 uint32_t & oldNumber, Ptr<const LsuContent> oldContent);
+  IsNewerLsuName (const std::string & lsuName) const;
 
   void
   GetAllLsuName (Ptr<LsuNameList> lsuNameList) const;
 
+  uint64_t
+  IncrementalHash (const std::string & update) const;
+
+  void
+  NewerLsuNameFilter (const std::vector<std::string> & inLsuNameList, std::vector<std::string> & outLsuNameList) const;
+
+  bool
+  InsertInLsuIdSeqMap (const std::string & lsuName, std::string & oldName);
+
+  bool
+  InsertNewLsu (const std::string & lsuName, Ptr<const LsuContent> newContent);
+
+  void
+  AddLsuContent (Ptr<const LsuContent> content);
+
+  void
+  RemoveLsuContent (Ptr<const LsuContent> content);
+
+  Ptr<const LsuContent>
+  GetLsuContent (const std::string & lsuName) const;
+
 private:
   std::list<LogTuple> m_digestLog;
-  std::map<std::string, LsuTuple> m_lsdb;
+  std::map<std::string, uint64_t> m_lsuIdSeqMap;
+  std::map<std::string, Ptr<const LsuContent> > m_lsdb;
   std::vector<AdjacencyTuple> m_adjacency;
   std::vector<ReachabilityTuple> m_reachability;
 }; // Class LocalProtocolState

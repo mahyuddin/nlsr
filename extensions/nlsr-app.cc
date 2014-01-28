@@ -61,7 +61,7 @@ NlsrApp::StartApplication ()
   ndn::App::StartApplication ();
 
   // Create a name components object for name ``/prefix/sub``
-  Ptr<ndn::Name> prefix = Create<ndn::Name> ("/nlsr/sync"); // now prefix contains ``/``
+  Ptr<ndn::Name> prefix = Create<ndn::Name> ("/nlsr"); // now prefix contains ``/``
 
   /////////////////////////////////////////////////////////////////////////////
   // Creating FIB entry that ensures that we will receive incoming Interests //
@@ -74,7 +74,7 @@ NlsrApp::StartApplication ()
   // Note that ``m_face`` is cretaed by ndn::App
   Ptr<ndn::fib::Entry> fibEntry = fib->Add (*prefix, m_face, 0);
 
-  Simulator::Schedule (Seconds (1.0), &NlsrApp::SendInterest, this);
+  Simulator::Schedule (Seconds (0.0), &NlsrApp::SendInterest, this);
 }
 
 // Processing when application is stopped
@@ -88,9 +88,10 @@ NlsrApp::StopApplication ()
 void
 NlsrApp::SendInterest ()
 {
-  const Ptr<ndn::Interest> interest = nlsr::NlsrProtocol::BuildSyncInterestWithDigest (ns3::Hash64("123"));
+  //const Ptr<ndn::Interest> interest = nlsr::NlsrProtocol::BuildSyncInterestWithDigest (m_nlsr.GetCurrentDigest ());
+  const Ptr<ndn::Interest> interest = nlsr::NlsrProtocol::BuildSyncInterestWithDigest (ns3::Hash64 ("/nlsr/resync"));
 
-  NS_LOG_DEBUG ("Sending Sync Interest with digest " << ns3::Hash64("123"));
+  //NS_LOG_DEBUG ("Sending Sync Interest with digest " << ns3::Hash64("123"));
   
   // Forward packet to lower (network) layer
   Simulator::ScheduleNow (&ndn::Face::ReceiveInterest, m_face, interest);
@@ -110,20 +111,18 @@ NlsrApp::OnInterest (Ptr<const ndn::Interest> interest)
 
   // Note that Interests send out by the app will not be sent back to the app !
 
-  uint64_t digest = NlsrProtocol::GetDigestFromSyncInterest (interest);
-  NS_LOG_DEBUG ("Receive Sync Digest " << digest);
+  Ptr<ndn::Data> data = m_nlsr.ProcessSyncInterest (interest);
 
+  // Ptr<nlsr::LsuNameList> nameList = Create<nlsr::LsuNameList> ();
+  // nameList->AddName ("/nlsr/router1/1234");
+  // nameList->AddName ("/nlsr/router2/1234");
 
-  Ptr<nlsr::LsuNameList> nameList = Create<nlsr::LsuNameList> ();
-  nameList->AddName ("/nlsr/router1/1234");
-  nameList->AddName ("/nlsr/router2/1234");
-
-  Ptr<Packet> packet = Create<Packet> ();
-  packet->AddHeader (*nameList);
+  // Ptr<Packet> packet = Create<Packet> ();
+  // packet->AddHeader (*nameList);
 
   
-  Ptr<ndn::Data> data = Create<ndn::Data> (packet);
-  data->SetName (Create<ndn::NameComponents> (interest->GetName ())); // data will have the same name as Interests
+  // Ptr<ndn::Data> data = Create<ndn::Data> (packet);
+  // data->SetName (Create<ndn::NameComponents> (interest->GetName ())); // data will have the same name as Interests
 
   NS_LOG_DEBUG ("Sending ContentObject packet for " << data->GetName ());
 
@@ -140,19 +139,21 @@ NlsrApp::OnData (Ptr<const ndn::Data> data)
 {
   NS_LOG_DEBUG ("Receiving Data packet for " << data->GetName ());
 
-  std::cout << "DATA received for name " << data->GetName () << std::endl;
+  // std::cout << "DATA received for name " << data->GetName () << std::endl;
   
-  Ptr<Packet> payload = data->GetPayload ()->Copy ();  
+  // Ptr<Packet> payload = data->GetPayload ()->Copy ();  
   
-  std::cout << "Content Size is " << payload->GetSize () << std::endl;
+  // std::cout << "Content Size is " << payload->GetSize () << std::endl;
 
-  // nlsr::LsuContent lsu;
-  // payload->RemoveHeader (lsu);
-  // lsu.Print(std::cout);
+  // // nlsr::LsuContent lsu;
+  // // payload->RemoveHeader (lsu);
+  // // lsu.Print(std::cout);
 
-  nlsr::LsuNameList nameList;
-  payload->RemoveHeader (nameList);
-  nameList.Print(std::cout);
+  // nlsr::LsuNameList nameList;
+  // payload->RemoveHeader (nameList);
+  // nameList.Print(std::cout);
+
+  m_nlsr.ProcessSyncData (data);
 
   // nlsr::HelloData helloData;
   // payload->RemoveHeader (helloData);

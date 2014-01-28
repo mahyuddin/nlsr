@@ -73,8 +73,8 @@ NlsrProtocol::BuildSyncInterestWithDigest (uint64_t digest)
   return interest;
 }
 
-uint64_t
-NlsrProtocol::GetDigestFromSyncInterest (Ptr<const ndn::Interest> syncInterest)
+Ptr<ndn::Data>
+NlsrProtocol::ProcessSyncInterest (Ptr<const ndn::Interest> syncInterest)
 {
 
   Ptr<const ndn::Name> name = syncInterest->GetNamePtr ();
@@ -86,10 +86,60 @@ NlsrProtocol::GetDigestFromSyncInterest (Ptr<const ndn::Interest> syncInterest)
   //{
   //   NS_LOG_DEBUG ("Component " << i << " :" << name->get (i).toUri ());
   //}
+  Ptr<Packet> packet = Create<Packet> ();
+  Ptr<LsuNameList> lsuNameList = Create<LsuNameList> ();
 
-  return name->get (2).toNumber (); 
+  uint64_t syncDigest = name->get (2).toNumber ();
+
+  if (syncDigest == ns3::Hash64 ("/nlsr/resync")) {
+    NS_LOG_DEBUG ("Resync! " << syncDigest);
+    GetAllLsuName(lsuNameList);
+  } else {
+    if (IsCurrentDigest (syncDigest)) {
+      NS_LOG_DEBUG ("Synced! " << syncDigest);
+    } else {
+      NS_LOG_DEBUG ("Not Synced! " << syncDigest);
+      if (IsDigestInLog (syncDigest)) {
+        NS_LOG_DEBUG ("Is In Log! " << syncDigest);
+        GetUpdateSinceThen (syncDigest, lsuNameList);
+      } else {
+        NS_LOG_DEBUG ("Not In Log! " << syncDigest);
+      }
+    }
+  }
+  packet->AddHeader (*lsuNameList);
+  Ptr<ndn::Data> data = Create<ndn::Data> (packet);
+  data->SetName (Create<ndn::Name> (syncInterest->GetName ()));
+  return data;
 }
 
+void
+NlsrProtocol::ProcessSyncData (Ptr<const ndn::Data> syncData)
+{
+  NS_LOG_DEBUG ("Receiving Data packet for " << syncData->GetName ());
+  
+  Ptr<Packet> payload = syncData->GetPayload ()->Copy ();  
+  
+  std::cout << "Content Size is " << payload->GetSize () << std::endl;
+
+  // nlsr::LsuContent lsu;
+  // payload->RemoveHeader (lsu);
+  // lsu.Print(std::cout);
+
+  nlsr::LsuNameList nameList;
+  payload->RemoveHeader (nameList);
+  nameList.Print(std::cout);
+  std::vector<std::string> outLsuNameList;
+
+  NewerLsuNameFilter (nameList.GetNameList (), outLsuNameList);
+
+  for (std::vector<std::string>::const_iterator i = outLsuNameList.begin ();
+       i != outLsuNameList.end ();
+       i++) 
+  {
+    InsertNewLsu (*i, 0);
+  }
+}
 
 } // namespace nlsr
 } // namespace ns3
