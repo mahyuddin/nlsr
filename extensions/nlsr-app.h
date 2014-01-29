@@ -92,6 +92,9 @@ public:
   void
   OnNewUpdate ();
 
+  void
+  PeriodicalSyncInterest ();
+
 private:
 
   void

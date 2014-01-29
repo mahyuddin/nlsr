@@ -81,7 +81,7 @@ NlsrApp::StartApplication ()
   SetRouterName ("router-" +  ss.str());
   NS_LOG_DEBUG ("Starting ... Router: " << GetRouterName ());
   Simulator::Schedule (Seconds (0.0), &NlsrApp::GenerateNewUpdate, this);
-  Simulator::Schedule (Seconds (0.1), &NlsrApp::SendSyncInterest, this);
+  Simulator::Schedule (Seconds (0.1), &NlsrApp::PeriodicalSyncInterest, this);
 }
 
 // Processing when application is stopped
@@ -106,7 +106,7 @@ NlsrApp::SendSyncInterest ()
   // Call trace (for logging purposes)
   m_transmittedInterests (interest, this, m_face);
 
-  Simulator::Schedule (Seconds (5), &NlsrApp::SendSyncInterest, this);
+  //Simulator::Schedule (Seconds (5), &NlsrApp::SendSyncInterest, this);
 
 }
 
@@ -122,6 +122,23 @@ NlsrApp::SendResyncInterest (uint64_t digest)
 
   // Call trace (for logging purposes)
   m_transmittedInterests (interest, this, m_face);
+}
+
+void
+NlsrApp::PeriodicalSyncInterest ()
+{
+  uint64_t digest = GetCurrentDigest ();
+  const Ptr<ndn::Interest> interest = BuildSyncInterestWithDigest (digest, true);
+
+  NS_LOG_DEBUG ("Sending PeriodicalSyncInterest with digest: " << digest);
+  
+  // Forward packet to lower (network) layer
+  Simulator::ScheduleNow (&ndn::Face::ReceiveInterest, m_face, interest);
+
+  // Call trace (for logging purposes)
+  m_transmittedInterests (interest, this, m_face);
+
+  Simulator::Schedule (Seconds (5), &NlsrApp::PeriodicalSyncInterest, this);
 }
 
 void
@@ -200,7 +217,7 @@ NlsrApp::OnInterest (Ptr<const ndn::Interest> interest)
         NS_LOG_DEBUG ("Is In Log! " << digest);
         SendUpdateSinceThen (digest);
       } else {
-        NS_LOG_DEBUG ("Not In Log! " << digest);
+        NS_LOG_DEBUG ("============= Not In Log! ============" << digest);
         SendResyncInterest (digest);
       }
     }
@@ -265,7 +282,8 @@ NlsrApp::GenerateNewUpdate ()
   InsertNewLsu (s, 0);
   NS_LOG_DEBUG ("New Updates: " << s << " New Digest: " << GetCurrentDigest ());
   OnNewUpdate ();
-  Simulator::Schedule (Seconds (1), &NlsrApp::GenerateNewUpdate, this);
+  UniformVariable rand (1, 2);
+  Simulator::Schedule (Seconds (rand.GetValue ()), &NlsrApp::GenerateNewUpdate, this);
 }
 
 void
