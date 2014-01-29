@@ -106,6 +106,9 @@ private:
   uint64_t
   GetNextSequenceNumber ();
 
+  bool
+  IsPacketDropped () const;
+
 private:
   std::string routerName;
   uint64_t m_seq;

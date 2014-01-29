@@ -202,6 +202,11 @@ NlsrApp::OnInterest (Ptr<const ndn::Interest> interest)
 {
   NS_LOG_DEBUG ("Receive Interest packet for " << interest->GetName ());
 
+  if ( IsPacketDropped () ) {
+    NS_LOG_DEBUG ("Packet lost !");
+    return;
+  }
+
   Ptr<const ndn::Name> name = interest->GetNamePtr ();
   
   NS_ASSERT (name->size () == 3);
@@ -240,8 +245,14 @@ NlsrApp::OnInterest (Ptr<const ndn::Interest> interest)
 // Callback that will be called when Data arrives
 void
 NlsrApp::OnData (Ptr<const ndn::Data> data)
-{
+{ 
+
   NS_LOG_DEBUG ("Receiving Data packet for " << data->GetName ());
+
+  if ( IsPacketDropped () ) {
+    NS_LOG_DEBUG ("Packet loss !");
+    return;
+  }
 
   ProcessSyncData (data);
 
@@ -281,6 +292,11 @@ NlsrApp::GenerateNewUpdate ()
   LsuIdSeqToName ("/" + GetRouterName () + "/lsu1" , GetNextSequenceNumber (), s);
   InsertNewLsu (s, 0);
   NS_LOG_DEBUG ("New Updates: " << s << " New Digest: " << GetCurrentDigest ());
+
+  LsuIdSeqToName ("/" + GetRouterName () + "/lsu2", GetNextSequenceNumber (), s);
+  InsertNewLsu (s, 0);
+  NS_LOG_DEBUG ("New Updates: " << s << " New Digest: " << GetCurrentDigest ()); 
+
   OnNewUpdate ();
   UniformVariable rand (1, 2);
   Simulator::Schedule (Seconds (rand.GetValue ()), &NlsrApp::GenerateNewUpdate, this);
@@ -332,6 +348,14 @@ uint64_t
 NlsrApp::GetNextSequenceNumber ()
 {
   return m_seq++;
+}
+
+bool
+NlsrApp::IsPacketDropped () const
+{
+  UniformVariable rand (0, 1);
+  double prob = 0.1;
+  return rand.GetValue () > prob ? false : true;
 }
 
 } // namespace nlsr
