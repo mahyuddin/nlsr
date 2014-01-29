@@ -108,7 +108,7 @@ public:
   uint64_t
   IncrementalHash (const std::string & update) const;
 
-  void
+  bool
   NewerLsuNameFilter (const std::vector<std::string> & inLsuNameList, std::vector<std::string> & outLsuNameList) const;
 
   bool

@@ -21,7 +21,6 @@
 // nlsr-app.cc
 
 #include "nlsr-app.h"
-#include "nlsr-protocol.h"
 #include "ns3/ptr.h"
 #include "ns3/log.h"
 #include "ns3/simulator.h"
@@ -41,6 +40,13 @@ namespace ns3 {
 namespace nlsr {
 
 NS_OBJECT_ENSURE_REGISTERED (NlsrApp);
+
+
+NlsrApp::NlsrApp ()
+{
+  m_seq = 1;
+  m_outstandingDigest = 0;
+}
 
 // register NS-3 type
 TypeId
@@ -74,18 +80,8 @@ NlsrApp::StartApplication ()
   ss << GetNode ()-> GetId ();
   SetRouterName ("router-" +  ss.str());
   NS_LOG_DEBUG ("Starting ... Router: " << GetRouterName ());
-  Simulator::Schedule (Seconds (0.0), &NlsrApp::NewUpdate, this);
-  Simulator::Schedule (Seconds (0.1), &NlsrApp::SendInterest, this);
-}
-
-void
-NlsrApp::NewUpdate ()
-{
-  std::string s;
-  LsuIdSeqToName ("/" + GetRouterName () + "/lsu1" , m_seq++, s);
-  InsertNewLsu (s, 0);
-  NS_LOG_DEBUG ("New Updates: " << s);
-  Simulator::Schedule (Seconds (0.3), &NlsrApp::NewUpdate, this);
+  Simulator::Schedule (Seconds (0.0), &NlsrApp::GenerateNewUpdate, this);
+  Simulator::Schedule (Seconds (0.1), &NlsrApp::SendSyncInterest, this);
 }
 
 // Processing when application is stopped
@@ -97,48 +93,40 @@ NlsrApp::StopApplication ()
 }
 
 void
-NlsrApp::SendInterest ()
+NlsrApp::SendSyncInterest ()
 {
-  //const Ptr<ndn::Interest> interest = nlsr::NlsrProtocol::BuildSyncInterestWithDigest (m_nlsr.GetCurrentDigest ());
-  //uint64_t digest = GetCurrentDigest ();
-  uint64_t digest = ns3::Hash64("/nlsr/resync");
+  uint64_t digest = GetCurrentDigest ();
+  const Ptr<ndn::Interest> interest = BuildSyncInterestWithDigest (digest, true);
 
-  const Ptr<ndn::Interest> interest = BuildSyncInterestWithDigest (digest);
-
-  NS_LOG_DEBUG ("Sending Sync Interest with digest " << digest);
+  NS_LOG_DEBUG ("Sending Sync Interest with digest: " << digest);
   
   // Forward packet to lower (network) layer
   Simulator::ScheduleNow (&ndn::Face::ReceiveInterest, m_face, interest);
 
-  Simulator::Schedule (Seconds (1.0), &NlsrApp::SendInterest, this);
+  // Call trace (for logging purposes)
+  m_transmittedInterests (interest, this, m_face);
+
+  Simulator::Schedule (Seconds (5), &NlsrApp::SendSyncInterest, this);
+
+}
+
+void
+NlsrApp::SendResyncInterest (uint64_t digest)
+{
+  const Ptr<ndn::Interest> interest = BuildSyncInterestWithDigest (digest, false);
+
+  NS_LOG_DEBUG ("Sending Resync Interest: " << interest->GetName ());
+  
+  // Forward packet to lower (network) layer
+  Simulator::ScheduleNow (&ndn::Face::ReceiveInterest, m_face, interest);
+
   // Call trace (for logging purposes)
   m_transmittedInterests (interest, this, m_face);
 }
 
-// Callback that will be called when Interest arrives
 void
-NlsrApp::OnInterest (Ptr<const ndn::Interest> interest)
+NlsrApp::SendSyncData (Ptr<ndn::Data> data)
 {
-  NS_LOG_DEBUG ("Received Interest packet for " << interest->GetName ());
-
-  // Create and configure ndn::ContentObjectHeader and ndn::ContentObjectTail
-  // (header is added in front of the packet, tail is added at the end of the packet)
-
-  // Note that Interests send out by the app will not be sent back to the app !
-
-  Ptr<ndn::Data> data = ProcessSyncInterest (interest);
-
-  // Ptr<nlsr::LsuNameList> nameList = Create<nlsr::LsuNameList> ();
-  // nameList->AddName ("/nlsr/router1/1234");
-  // nameList->AddName ("/nlsr/router2/1234");
-
-  // Ptr<Packet> packet = Create<Packet> ();
-  // packet->AddHeader (*nameList);
-
-  
-  // Ptr<ndn::Data> data = Create<ndn::Data> (packet);
-  // data->SetName (Create<ndn::NameComponents> (interest->GetName ())); // data will have the same name as Interests
-
   NS_LOG_DEBUG ("Sending ContentObject packet for " << data->GetName ());
 
   // Forward packet to lower (network) layer
@@ -148,31 +136,184 @@ NlsrApp::OnInterest (Ptr<const ndn::Interest> interest)
   m_transmittedDatas (data, this, m_face);
 }
 
+// void
+// NlsrApp::WaitForUpdates (uint64_t digest)
+// {
+//   if (IsCurrentDigest (digest)) {
+//       NS_LOG_DEBUG ("No Update after Waiting: " << digest);
+//       //Simulator::Schedule (Seconds (3), &NlsrApp::WaitForUpdates, this, digest);
+//       return;
+//   } else {
+//     if (IsDigestInLog (digest)) {
+//       NS_LOG_DEBUG ("Is In Log! " << digest);
+//       SendUpdateSinceThen (digest);
+//     } else {
+//       NS_LOG_DEBUG ("Not In Log! " << digest);
+//       //SendSyncInterest (GetCurrentDigest ());
+//       SendResyncInterest (digest);
+//       return;
+//     }
+//   }  
+// }
+
+void
+NlsrApp::SendUpdateSinceThen (uint64_t digest)
+{
+  Ptr<Packet> packet = Create<Packet> ();
+  Ptr<LsuNameList> lsuNameList = Create<LsuNameList> ();
+  Ptr<ndn::Name> prefix = Create<ndn::Name> ("/nlsr");
+
+  if (digest == 0) {
+    GetAllLsuName (lsuNameList);
+    digest = GetCurrentDigest ();
+    prefix->append ("resync");
+  } else {
+    GetUpdateSinceThen (digest, lsuNameList);    
+    prefix->append ("sync");
+  }
+
+  Ptr<ndn::Data> data = Create<ndn::Data> (packet);
+  prefix->appendNumber (digest);
+  data->SetName (prefix);
+  packet->AddHeader (*lsuNameList);
+  SendSyncData (data);
+}
+
+// Callback that will be called when Interest arrives
+void
+NlsrApp::OnInterest (Ptr<const ndn::Interest> interest)
+{
+  NS_LOG_DEBUG ("Receive Interest packet for " << interest->GetName ());
+
+  Ptr<const ndn::Name> name = interest->GetNamePtr ();
+  
+  NS_ASSERT (name->size () == 3);
+  if (name->getPrefix (2).toUri ().compare ("/nlsr/sync") == 0) {
+    uint64_t digest = name->get (2).toNumber ();
+    NS_LOG_DEBUG ("Sync Request! " << digest);
+    if (IsCurrentDigest (digest)) {
+      NS_LOG_DEBUG ("============= Synced! ============" << digest);
+      //Simulator::Schedule (Seconds (3), &NlsrApp::WaitForUpdates, this, digest);
+      SetOutstandingDigest (digest);
+    } else {
+      if (IsDigestInLog (digest)) {
+        NS_LOG_DEBUG ("Is In Log! " << digest);
+        SendUpdateSinceThen (digest);
+      } else {
+        NS_LOG_DEBUG ("Not In Log! " << digest);
+        SendResyncInterest (digest);
+      }
+    }
+  } else {
+    if (name->getPrefix (2).toUri ().compare ("/nlsr/resync") == 0) {
+      uint64_t digest = name->get (2).toNumber ();
+      NS_LOG_DEBUG ("Resync Request! " << digest);
+      if (IsCurrentDigest (digest)) {
+          NS_LOG_DEBUG ("Resync with CurrenetDigest: " << digest);
+          SendUpdateSinceThen (0);
+      } else {
+          NS_LOG_DEBUG ("Cannot Resync with CurrenetDigest: " << GetCurrentDigest ());
+      }
+    } else {
+      NS_LOG_DEBUG ("Unknown Request! " << name);
+    }
+  }
+}
+
 // Callback that will be called when Data arrives
 void
 NlsrApp::OnData (Ptr<const ndn::Data> data)
 {
   NS_LOG_DEBUG ("Receiving Data packet for " << data->GetName ());
 
-  // std::cout << "DATA received for name " << data->GetName () << std::endl;
-  
-  // Ptr<Packet> payload = data->GetPayload ()->Copy ();  
-  
-  // std::cout << "Content Size is " << payload->GetSize () << std::endl;
-
-  // // nlsr::LsuContent lsu;
-  // // payload->RemoveHeader (lsu);
-  // // lsu.Print(std::cout);
-
-  // nlsr::LsuNameList nameList;
-  // payload->RemoveHeader (nameList);
-  // nameList.Print(std::cout);
-
   ProcessSyncData (data);
 
-  // nlsr::HelloData helloData;
-  // payload->RemoveHeader (helloData);
-  // helloData.Print(std::cout);
+  //Simulator::Schedule (Seconds (0.1), &NlsrApp::SendSyncInterest, this);
+}
+
+void
+NlsrApp::ProcessSyncData (Ptr<const ndn::Data> syncData)
+{
+  NS_LOG_DEBUG ("Receiving Data packet for " << syncData->GetName ());
+  
+  Ptr<Packet> payload = syncData->GetPayload ()->Copy ();  
+  
+  //std::cout << "Content Size is " << payload->GetSize () << std::endl;
+
+  nlsr::LsuNameList nameList;
+  payload->RemoveHeader (nameList);
+  nameList.Print(std::cout);
+  std::vector<std::string> outLsuNameList;
+
+  bool isNew = NewerLsuNameFilter (nameList.GetNameList (), outLsuNameList);
+
+  for (std::vector<std::string>::const_iterator i = outLsuNameList.begin ();
+       i != outLsuNameList.end ();
+       i++) 
+  {
+    InsertNewLsu (*i, 0);
+  }
+
+  OnNewUpdate ();
+}
+
+void
+NlsrApp::GenerateNewUpdate ()
+{
+  std::string s;
+  LsuIdSeqToName ("/" + GetRouterName () + "/lsu1" , GetNextSequenceNumber (), s);
+  InsertNewLsu (s, 0);
+  NS_LOG_DEBUG ("New Updates: " << s << " New Digest: " << GetCurrentDigest ());
+  OnNewUpdate ();
+  Simulator::Schedule (Seconds (1), &NlsrApp::GenerateNewUpdate, this);
+}
+
+void
+NlsrApp::OnNewUpdate ()
+{
+  if (GetOutstandingDigest () == 0) {
+    NS_LOG_DEBUG ("No Outstanding Interest");
+  } else {
+    SendUpdateSinceThen (GetOutstandingDigest ());
+    SetOutstandingDigest (0);
+  }
+  SendSyncInterest ();
+}
+
+const Ptr<ndn::Interest>
+NlsrApp::BuildSyncInterestWithDigest (uint64_t digest, bool isSync)
+{
+  //NS_LOG_DEBUG ("");
+  std::string prefix = (isSync == true?  "/nlsr/sync" : "/nlsr/resync");
+  Ptr<ndn::Name> name = Create<ndn::Name> (prefix);
+  name->appendNumber (digest);
+
+  // Create and configure ndn::InterestHeader
+  Ptr<ndn::Interest> interest = Create<ndn::Interest> ();
+  UniformVariable rand (0,std::numeric_limits<uint32_t>::max ());
+  interest->SetNonce            (rand.GetValue ());
+  interest->SetName             (name);
+  interest->SetInterestLifetime (Seconds (5.0));
+
+  return interest;
+}
+
+void
+NlsrApp::SetOutstandingDigest (uint64_t digest)
+{
+  m_outstandingDigest = digest;
+}
+
+uint64_t
+NlsrApp::GetOutstandingDigest () const
+{
+  return m_outstandingDigest;
+}
+
+uint64_t
+NlsrApp::GetNextSequenceNumber ()
+{
+  return m_seq++;
 }
 
 } // namespace nlsr

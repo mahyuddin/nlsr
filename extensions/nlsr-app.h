@@ -23,7 +23,7 @@
 #ifndef NLSR_APP_H_
 #define NLSR_APP_H_
 
-#include "nlsr-protocol.h"
+#include "nlsr-state.h"
 #include "ns3/ndn-app.h"
 
 namespace ns3 {
@@ -39,9 +39,12 @@ namespace nlsr {
  *
  * When an Interest is received, it is replied with a ContentObject with 1024-byte fake payload
  */
-class NlsrApp : public ndn::App, NlsrProtocol
+class NlsrApp : public ndn::App, NlsrState
 {
+
 public:
+  NlsrApp ();
+
   // register NS-3 type "NlsrApp"
   static TypeId
   GetTypeId ();
@@ -62,16 +65,48 @@ public:
   virtual void
   OnData (Ptr<const ndn::Data> data);
 
-private:
-  void
-  SendInterest ();
+  const Ptr<ndn::Interest>
+  BuildSyncInterestWithDigest (uint64_t digest, bool isSync);
 
   void
-  NewUpdate ();
+  ProcessSyncData (Ptr<const ndn::Data> syncData);
+
+ // void
+ // WaitForUpdates (uint64_t digest);
+
+  void
+  SendUpdateSinceThen (uint64_t digest);
+
+  void
+  SendSyncInterest ();
+
+  void
+  SendResyncInterest (uint64_t digest);
+
+  void
+  SendSyncData (Ptr<ndn::Data> data);
+
+  void
+  GenerateNewUpdate ();
+
+  void
+  OnNewUpdate ();
+
+private:
+
+  void
+  SetOutstandingDigest (uint64_t digest);
+
+  uint64_t
+  GetOutstandingDigest () const;
+
+  uint64_t
+  GetNextSequenceNumber ();
 
 private:
   std::string routerName;
-  uint64_t m_seq = 1;
+  uint64_t m_seq;
+  uint64_t m_outstandingDigest;
 
 };
 

@@ -316,7 +316,8 @@ LsuNameList::Print (std::ostream &os) const
   for ( std::vector<std::string>::const_iterator i = m_nameList.begin ();
         i != m_nameList.end ();
         i++ ) {
-    os << "LsuName:  " << i->c_str() << "  Length:  " << i->size () << std::endl;
+    //os << "LsuName:  " << i->c_str() << "  Length:  " << i->size () << std::endl;
+    os << "LsuName:  " << i->c_str() << std::endl;
   }
 }
 

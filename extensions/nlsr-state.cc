@@ -100,8 +100,9 @@ NlsrState::AddToLog (uint64_t digest, const std::string & lsuName)
 {
   LogTuple logTuple (digest, lsuName);
   m_digestLog.push_front (logTuple);
+  NS_LOG_DEBUG ("digest: " << digest << "lsuName: " << lsuName);
 
-  if (m_digestLog.size () > 100) {
+  if (m_digestLog.size () > 10000) {
     m_digestLog.pop_back ();
   }
 }
@@ -140,9 +141,9 @@ uint64_t
 NlsrState::IncrementalHash (const std::string & newName, const std::string & oldName) const
 {
   if (oldName == "") {
-    return GetCurrentDigest() | ns3::Hash64(newName);
+    return GetCurrentDigest() ^ ns3::Hash64(newName);
   } else {
-    return GetCurrentDigest() | ns3::Hash64(newName) | ns3::Hash64 (oldName);
+    return GetCurrentDigest() ^ ns3::Hash64(newName) ^ ns3::Hash64 (oldName);
   }
 }
 
@@ -164,9 +165,10 @@ NlsrState::IsNewerLsuName (const std::string & lsuName) const
   return true;
 }
 
-void
+bool
 NlsrState::NewerLsuNameFilter (const std::vector<std::string> & inLsuNameList, std::vector<std::string> & outLsuNameList) const
 {
+  bool isNew = false;
   for (std::vector<std::string>::const_iterator i = inLsuNameList.begin ();
        i != inLsuNameList.end ();
        i++ )
@@ -174,8 +176,10 @@ NlsrState::NewerLsuNameFilter (const std::vector<std::string> & inLsuNameList, s
     if (IsNewerLsuName (*i)) {
       outLsuNameList.push_back (*i);
       NS_LOG_DEBUG ("NewerLsuName: " << *i);
+      isNew = true;
     }
   }
+  return isNew;
 }
 
 bool
@@ -187,8 +191,8 @@ NlsrState::InsertInLsuIdSeqMap (const std::string & lsuName, std::string & oldNa
   std::map<std::string, uint64_t>::iterator i = m_lsuIdSeqMap.find (lsuId);
   if (i != m_lsuIdSeqMap.end ()) {
     if (seq > i->second) {
-      i->second = seq;
       LsuIdSeqToName (i->first, i->second, oldName);
+      i->second = seq;
       return true;
     } else {
       return false;
@@ -217,15 +221,16 @@ bool
 NlsrState::InsertNewLsu (const std::string & lsuName, Ptr<const LsuContent> newContent)
 {
   std::string oldName = "";
-  NS_LOG_DEBUG ("lsuName: " << lsuName);
   if (not InsertInLsuIdSeqMap (lsuName, oldName)) {
+    NS_LOG_DEBUG ("Old lsuName: " << lsuName);
     return false;
   }
+  NS_LOG_DEBUG ("New lsuName: " << lsuName << " Old lsuName: " << oldName);
   AddToLog (IncrementalHash (lsuName, oldName), lsuName);
   m_lsdb[lsuName] = newContent;
   AddLsuContent (newContent);
   if (oldName != "") {
-    std::map<std::string, Ptr<const LsuContent> >::iterator i = m_lsdb.find (lsuName);
+    std::map<std::string, Ptr<const LsuContent> >::iterator i = m_lsdb.find (oldName);
     NS_ASSERT (i != m_lsdb.end ());
     RemoveLsuContent (i->second);
     m_lsdb.erase (i);
