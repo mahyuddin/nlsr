@@ -129,11 +129,12 @@ private:
 
 // ========== Class LsuNameList ============
   
-class LsuNameList : public Header, public SimpleRefCount<LsuContent> {
+class LsuNameList : public Header, public SimpleRefCount<LsuNameList> {
 
 public:
 
   LsuNameList ();
+  LsuNameList (const std::vector<std::string> & nameList);
   virtual ~LsuNameList ();  
 
   static TypeId
@@ -156,9 +157,12 @@ public:
 
   const std::vector<std::string> &
   GetNameList () const;
+
+  std::vector<std::string> &
+  Get ();
   
   void
-  AddName (const std::string & lsuName);
+  AddName (const std::string & name);
 
 private:
   std::vector<std::string> m_nameList;

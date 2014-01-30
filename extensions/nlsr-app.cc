@@ -80,6 +80,7 @@ NlsrApp::StartApplication ()
   ss << GetNode ()-> GetId ();
   SetRouterName ("router-" +  ss.str());
   NS_LOG_DEBUG ("Starting ... Router: " << GetRouterName ());
+
   Simulator::Schedule (Seconds (0.0), &NlsrApp::GenerateNewUpdate, this);
   Simulator::Schedule (Seconds (0.1), &NlsrApp::PeriodicalSyncInterest, this);
 }
@@ -93,29 +94,11 @@ NlsrApp::StopApplication ()
 }
 
 void
-NlsrApp::SendSyncInterest ()
+NlsrApp::SendSyncInterest (uint64_t digest1, uint64_t digest2)
 {
-  uint64_t digest = GetCurrentDigest ();
-  const Ptr<ndn::Interest> interest = BuildSyncInterestWithDigest (digest, true);
+  const Ptr<ndn::Interest> interest = BuildSyncInterest (digest1, digest2);
 
-  NS_LOG_DEBUG ("Sending Sync Interest with digest: " << digest);
-  
-  // Forward packet to lower (network) layer
-  Simulator::ScheduleNow (&ndn::Face::ReceiveInterest, m_face, interest);
-
-  // Call trace (for logging purposes)
-  m_transmittedInterests (interest, this, m_face);
-
-  //Simulator::Schedule (Seconds (5), &NlsrApp::SendSyncInterest, this);
-
-}
-
-void
-NlsrApp::SendResyncInterest (uint64_t digest)
-{
-  const Ptr<ndn::Interest> interest = BuildSyncInterestWithDigest (digest, false);
-
-  NS_LOG_DEBUG ("Sending Resync Interest: " << interest->GetName ());
+  NS_LOG_DEBUG ("Sending Sync Interest: " << interest->GetName ());
   
   // Forward packet to lower (network) layer
   Simulator::ScheduleNow (&ndn::Face::ReceiveInterest, m_face, interest);
@@ -127,10 +110,9 @@ NlsrApp::SendResyncInterest (uint64_t digest)
 void
 NlsrApp::PeriodicalSyncInterest ()
 {
-  uint64_t digest = GetCurrentDigest ();
-  const Ptr<ndn::Interest> interest = BuildSyncInterestWithDigest (digest, true);
+  const Ptr<ndn::Interest> interest = BuildSyncInterest (GetCurrentDigest (), 0);
 
-  NS_LOG_DEBUG ("Sending PeriodicalSyncInterest with digest: " << digest);
+  NS_LOG_DEBUG ("Sending Periodical Sync Interest: " << interest->GetName ());
   
   // Forward packet to lower (network) layer
   Simulator::ScheduleNow (&ndn::Face::ReceiveInterest, m_face, interest);
@@ -144,7 +126,7 @@ NlsrApp::PeriodicalSyncInterest ()
 void
 NlsrApp::SendSyncData (Ptr<ndn::Data> data)
 {
-  NS_LOG_DEBUG ("Sending ContentObject packet for " << data->GetName ());
+  NS_LOG_DEBUG ("Sending Data packet for " << data->GetName ());
 
   // Forward packet to lower (network) layer
   Simulator::ScheduleNow (&ndn::Face::ReceiveData, m_face, data);
@@ -153,46 +135,33 @@ NlsrApp::SendSyncData (Ptr<ndn::Data> data)
   m_transmittedDatas (data, this, m_face);
 }
 
-// void
-// NlsrApp::WaitForUpdates (uint64_t digest)
-// {
-//   if (IsCurrentDigest (digest)) {
-//       NS_LOG_DEBUG ("No Update after Waiting: " << digest);
-//       //Simulator::Schedule (Seconds (3), &NlsrApp::WaitForUpdates, this, digest);
-//       return;
-//   } else {
-//     if (IsDigestInLog (digest)) {
-//       NS_LOG_DEBUG ("Is In Log! " << digest);
-//       SendUpdateSinceThen (digest);
-//     } else {
-//       NS_LOG_DEBUG ("Not In Log! " << digest);
-//       //SendSyncInterest (GetCurrentDigest ());
-//       SendResyncInterest (digest);
-//       return;
-//     }
-//   }  
-// }
-
 void
 NlsrApp::SendUpdateSinceThen (uint64_t digest)
 {
-  Ptr<Packet> packet = Create<Packet> ();
   Ptr<LsuNameList> lsuNameList = Create<LsuNameList> ();
-  Ptr<ndn::Name> prefix = Create<ndn::Name> ("/nlsr");
+  GetUpdateSinceThen (digest, lsuNameList->Get ());
 
-  if (digest == 0) {
-    GetAllLsuName (lsuNameList);
-    digest = GetCurrentDigest ();
-    prefix->append ("resync");
-  } else {
-    GetUpdateSinceThen (digest, lsuNameList);    
-    prefix->append ("sync");
-  }
+  Ptr<Packet> packet = Create<Packet> ();
+  packet->AddHeader (*lsuNameList);
 
   Ptr<ndn::Data> data = Create<ndn::Data> (packet);
-  prefix->appendNumber (digest);
-  data->SetName (prefix);
+  data->SetName (MakeSyncName (digest, GetCurrentDigest ()));
+
+  SendSyncData (data);
+}
+
+void
+NlsrApp::SendUpdateByThen (uint64_t digest)
+{
+  Ptr<LsuNameList> lsuNameList = Create<LsuNameList> ();
+  GetUpdateByThen (digest, lsuNameList->Get ());
+
+  Ptr<Packet> packet = Create<Packet> ();
   packet->AddHeader (*lsuNameList);
+
+  Ptr<ndn::Data> data = Create<ndn::Data> (packet);
+  data->SetName (MakeSyncName (INITIAL_DIGEST, digest));
+
   SendSyncData (data);
 }
 
@@ -208,37 +177,33 @@ NlsrApp::OnInterest (Ptr<const ndn::Interest> interest)
   }
 
   Ptr<const ndn::Name> name = interest->GetNamePtr ();
-  
-  NS_ASSERT (name->size () == 3);
-  if (name->getPrefix (2).toUri ().compare ("/nlsr/sync") == 0) {
-    uint64_t digest = name->get (2).toNumber ();
-    NS_LOG_DEBUG ("Sync Request! " << digest);
-    if (IsCurrentDigest (digest)) {
-      NS_LOG_DEBUG ("============= Synced! ============" << digest);
-      //Simulator::Schedule (Seconds (3), &NlsrApp::WaitForUpdates, this, digest);
-      SetOutstandingDigest (digest);
+  uint64_t digest1 = 0;
+  uint64_t digest2 = 0;
+  GetDigestFromName (name, digest1, digest2);
+
+  if (digest2 == 0) {
+    NS_LOG_DEBUG ("Sync Request! " << digest1);
+    if (IsCurrentDigest (digest1)) {
+      NS_LOG_DEBUG ("============= Synced! ============" << digest1);
+      SetOutstandingDigest (digest1);
     } else {
-      if (IsDigestInLog (digest)) {
-        NS_LOG_DEBUG ("Is In Log! " << digest);
-        SendUpdateSinceThen (digest);
+      if (IsDigestInLog (digest1)) {
+        NS_LOG_DEBUG ("Is In Log! " << digest1);
+        SendUpdateSinceThen (digest1);
       } else {
-        NS_LOG_DEBUG ("============= Not In Log! ============" << digest);
-        SendResyncInterest (digest);
+        NS_LOG_DEBUG ("============= Not In Log! ============" << digest1);
+        SendSyncInterest (INITIAL_DIGEST, digest1);
       }
     }
   } else {
-    if (name->getPrefix (2).toUri ().compare ("/nlsr/resync") == 0) {
-      uint64_t digest = name->get (2).toNumber ();
-      NS_LOG_DEBUG ("Resync Request! " << digest);
-      if (IsCurrentDigest (digest)) {
-          NS_LOG_DEBUG ("Resync with CurrenetDigest: " << digest);
-          SendUpdateSinceThen (0);
-      } else {
-          NS_LOG_DEBUG ("Cannot Resync with CurrenetDigest: " << GetCurrentDigest ());
-      }
+    NS_LOG_DEBUG ("Resync Request! " << digest1 << " " << digest2);
+    if (IsDigestInLog (digest2)) {
+        NS_LOG_DEBUG ("=========== Resync with Digest: " << digest2);
+        //SendUpdateSinceThen (0);
+        SendUpdateByThen (digest2);
     } else {
-      NS_LOG_DEBUG ("Unknown Request! " << name);
-    }
+        NS_LOG_DEBUG ("=========== Cannot Resync with Digest: " << digest2);
+    } 
   }
 }
 
@@ -254,47 +219,41 @@ NlsrApp::OnData (Ptr<const ndn::Data> data)
     return;
   }
 
-  ProcessSyncData (data);
-
-  //Simulator::Schedule (Seconds (0.1), &NlsrApp::SendSyncInterest, this);
-}
-
-void
-NlsrApp::ProcessSyncData (Ptr<const ndn::Data> syncData)
-{
-  NS_LOG_DEBUG ("Receiving Data packet for " << syncData->GetName ());
-  
-  Ptr<Packet> payload = syncData->GetPayload ()->Copy ();  
+  Ptr<Packet> payload = data->GetPayload ()->Copy ();  
   
   //std::cout << "Content Size is " << payload->GetSize () << std::endl;
 
   nlsr::LsuNameList nameList;
   payload->RemoveHeader (nameList);
   nameList.Print(std::cout);
-  std::vector<std::string> outLsuNameList;
+  std::vector<std::string> newNameList;
+  bool hasNew = false;
 
-  bool isNew = NewerLsuNameFilter (nameList.GetNameList (), outLsuNameList);
-
-  for (std::vector<std::string>::const_iterator i = outLsuNameList.begin ();
-       i != outLsuNameList.end ();
+  for (std::vector<std::string>::const_iterator i = nameList.GetNameList ().begin ();
+       i != nameList.GetNameList ().end ();
        i++) 
   {
-    InsertNewLsu (*i, 0);
+    std::string oldName;
+    if (Update (*i, oldName) == true) {
+      hasNew = true;
+      newNameList.push_back (*i);
+    }
   }
 
-  OnNewUpdate ();
+  if (hasNew) OnNewUpdate ();
 }
 
 void
 NlsrApp::GenerateNewUpdate ()
 {
   std::string s;
-  LsuIdSeqToName ("/" + GetRouterName () + "/lsu1" , GetNextSequenceNumber (), s);
-  InsertNewLsu (s, 0);
+  std::string old;
+  IdSeqToName ("/" + GetRouterName () + "/lsu1" , GetNextSequenceNumber (), s);
+  Update (s, old);
   NS_LOG_DEBUG ("New Updates: " << s << " New Digest: " << GetCurrentDigest ());
 
-  LsuIdSeqToName ("/" + GetRouterName () + "/lsu2", GetNextSequenceNumber (), s);
-  InsertNewLsu (s, 0);
+  IdSeqToName ("/" + GetRouterName () + "/lsu2", GetNextSequenceNumber (), s);
+  Update (s, old);
   NS_LOG_DEBUG ("New Updates: " << s << " New Digest: " << GetCurrentDigest ()); 
 
   OnNewUpdate ();
@@ -311,18 +270,17 @@ NlsrApp::OnNewUpdate ()
     SendUpdateSinceThen (GetOutstandingDigest ());
     SetOutstandingDigest (0);
   }
-  SendSyncInterest ();
+  SendSyncInterest (GetCurrentDigest(), 0);
 }
 
 const Ptr<ndn::Interest>
-NlsrApp::BuildSyncInterestWithDigest (uint64_t digest, bool isSync)
+NlsrApp::BuildSyncInterest (uint64_t digest1, uint64_t digest2)
 {
-  //NS_LOG_DEBUG ("");
-  std::string prefix = (isSync == true?  "/nlsr/sync" : "/nlsr/resync");
-  Ptr<ndn::Name> name = Create<ndn::Name> (prefix);
-  name->appendNumber (digest);
-
-  // Create and configure ndn::InterestHeader
+  Ptr<ndn::Name> name = Create<ndn::Name> (SYNC_PREFIX);
+  name->appendNumber (digest1);
+  if (digest2 != 0) {
+    name->appendNumber (digest2);
+  }
   Ptr<ndn::Interest> interest = Create<ndn::Interest> ();
   UniformVariable rand (0,std::numeric_limits<uint32_t>::max ());
   interest->SetNonce            (rand.GetValue ());
@@ -354,8 +312,46 @@ bool
 NlsrApp::IsPacketDropped () const
 {
   UniformVariable rand (0, 1);
-  double prob = 0.1;
-  return rand.GetValue () > prob ? false : true;
+  double prob = 0;
+  return rand.GetValue () >= prob ? false : true;
+}
+
+Ptr<ndn::Name> 
+NlsrApp::MakeSyncName (uint64_t oldDigest, uint64_t newDigest) const
+{
+  Ptr<ndn::Name> prefix = Create<ndn::Name> (SYNC_PREFIX);
+
+  prefix->appendNumber (oldDigest);
+
+  if (newDigest != 0) {
+    prefix->appendNumber (newDigest);
+  }
+  return prefix;
+}
+
+void
+NlsrApp::GetDigestFromName (Ptr<const ndn::Name> name, uint64_t & digest1, uint64_t & digest2) const
+{ 
+  NS_ASSERT (name->getPrefix (2).toUri ().compare (SYNC_PREFIX) == 0);
+
+  digest1 = name->get (2).toNumber ();  
+  if (name->size () == 4) {
+    digest2 = name->get (3).toNumber ();
+  } else {
+    digest2 = 0;
+  }
+}
+
+const std::string &
+NlsrApp::GetRouterName () const
+{
+  return m_routerName;
+}
+
+void
+NlsrApp::SetRouterName (const std::string & routerName)
+{
+  m_routerName = routerName;
 }
 
 } // namespace nlsr

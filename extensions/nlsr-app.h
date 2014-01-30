@@ -23,7 +23,8 @@
 #ifndef NLSR_APP_H_
 #define NLSR_APP_H_
 
-#include "nlsr-state.h"
+#include "nlsr-sync.h"
+#include "nlsr-lsu.h"
 #include "ns3/ndn-app.h"
 
 namespace ns3 {
@@ -39,7 +40,11 @@ namespace nlsr {
  *
  * When an Interest is received, it is replied with a ContentObject with 1024-byte fake payload
  */
-class NlsrApp : public ndn::App, NlsrState
+
+static const std::string SYNC_PREFIX = "/nslr/sync";
+
+
+class NlsrApp : public ndn::App, NlsrSync
 {
 
 public:
@@ -66,22 +71,16 @@ public:
   OnData (Ptr<const ndn::Data> data);
 
   const Ptr<ndn::Interest>
-  BuildSyncInterestWithDigest (uint64_t digest, bool isSync);
-
-  void
-  ProcessSyncData (Ptr<const ndn::Data> syncData);
-
- // void
- // WaitForUpdates (uint64_t digest);
+  BuildSyncInterest (uint64_t digest1, uint64_t digest2);
 
   void
   SendUpdateSinceThen (uint64_t digest);
 
   void
-  SendSyncInterest ();
+  SendUpdateByThen (uint64_t digest);
 
   void
-  SendResyncInterest (uint64_t digest);
+  SendSyncInterest (uint64_t oldDigest, uint64_t newDigest);
 
   void
   SendSyncData (Ptr<ndn::Data> data);
@@ -109,8 +108,20 @@ private:
   bool
   IsPacketDropped () const;
 
+  Ptr<ndn::Name> 
+  MakeSyncName (uint64_t oldDigest, uint64_t newDigest) const;
+
+  void
+  GetDigestFromName (Ptr<const ndn::Name> name, uint64_t & digest1, uint64_t & digest2) const;
+
+  const std::string &
+  GetRouterName () const;
+
+  void
+  SetRouterName (const std::string & routerName);
+
 private:
-  std::string routerName;
+  std::string m_routerName;
   uint64_t m_seq;
   uint64_t m_outstandingDigest;
 

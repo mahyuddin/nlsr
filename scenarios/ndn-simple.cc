@@ -90,7 +90,7 @@ main (int argc, char *argv[])
   app1.Start (Seconds (0.6)); // will send out an Interests, which will be received and satisfied by app1
   app2.Start (Seconds (0.9)); // will send out an Interests, which will be received and satisfied by app1
   
-  Simulator::Stop (Seconds (30.0));
+  Simulator::Stop (Seconds (20.0));
 
   Simulator::Run ();
   Simulator::Destroy ();

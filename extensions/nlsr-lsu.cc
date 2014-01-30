@@ -272,6 +272,11 @@ LsuNameList::LsuNameList ()
 {
 }
 
+LsuNameList::LsuNameList (const std::vector<std::string> & nameList)
+{
+   std::copy (nameList.begin(), nameList.end (), m_nameList.begin ());
+}
+
 LsuNameList::~LsuNameList ()
 {
 }
@@ -374,6 +379,12 @@ LsuNameList::Deserialize (Buffer::Iterator start)
 
 const std::vector<std::string> &
 LsuNameList::GetNameList () const
+{
+  return m_nameList;
+}
+
+std::vector<std::string> &
+LsuNameList::Get ()
 {
   return m_nameList;
 }
