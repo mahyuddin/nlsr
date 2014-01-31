@@ -26,7 +26,7 @@
 #include "ns3/header.h"
 
 namespace ns3 {
-namespace nlsr {
+namespace ndn {
 
 // LSU Name: /nlsr/<router>/<lsu>/<seq#>
 //   lsu: a number/string
@@ -43,7 +43,7 @@ namespace nlsr {
 //   reachability of prefix (optional): <prefix, metric>*
 //                                      prefix: name prefix
 
-// ========== Class LsuNameList ============
+// ========== Class NameListHeader ============
 
 class LsuContent : public Header, public SimpleRefCount<LsuContent> {
 
@@ -127,15 +127,15 @@ private:
 
 }; // class LsuContent
 
-// ========== Class LsuNameList ============
+// ========== Class NameListHeader ============
   
-class LsuNameList : public Header, public SimpleRefCount<LsuNameList> {
+class NameListHeader : public Header, public SimpleRefCount<NameListHeader> {
 
 public:
 
-  LsuNameList ();
-  LsuNameList (const std::vector<std::string> & nameList);
-  virtual ~LsuNameList ();  
+  NameListHeader ();
+  NameListHeader (const std::vector<std::string> & nameList);
+  virtual ~NameListHeader ();  
 
   static TypeId
   GetTypeId (void);
@@ -167,7 +167,7 @@ public:
 private:
   std::vector<std::string> m_nameList;
 
-}; // class LsuNameList
+}; // class NameListHeader
 
 // ========== Class HelloData ============
   
@@ -229,9 +229,9 @@ private:
   uint32_t m_deadTime;
   uint8_t m_version;
 
-}; // class LsuNameList
+}; // class NameListHeader
 
-} // namespace nlsr
+} // namespace ndn
 } // namespace ns3
 
 #endif /* NLSR_LSU_H */

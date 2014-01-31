@@ -20,7 +20,7 @@
 
 // nlsr-app.cc
 
-#include "nlsr-app.h"
+#include "sync-app.h"
 #include "ns3/ptr.h"
 #include "ns3/log.h"
 #include "ns3/simulator.h"
@@ -34,15 +34,15 @@
 #include "ns3/ndn-fib.h"
 #include "ns3/random-variable.h"
 
-NS_LOG_COMPONENT_DEFINE ("NlsrApp");
+NS_LOG_COMPONENT_DEFINE ("SyncApp");
 
 namespace ns3 {
-namespace nlsr {
+namespace ndn {
 
-NS_OBJECT_ENSURE_REGISTERED (NlsrApp);
+NS_OBJECT_ENSURE_REGISTERED (SyncApp);
 
 
-NlsrApp::NlsrApp ()
+SyncApp::SyncApp ()
 {
   m_seq = 1;
   m_outstandingDigest = 0;
@@ -50,18 +50,18 @@ NlsrApp::NlsrApp ()
 
 // register NS-3 type
 TypeId
-NlsrApp::GetTypeId ()
+SyncApp::GetTypeId ()
 {
-  static TypeId tid = TypeId ("NlsrApp")
+  static TypeId tid = TypeId ("SyncApp")
     .SetParent<ndn::App> ()
-    .AddConstructor<NlsrApp> ()
+    .AddConstructor<SyncApp> ()
     ;
   return tid;
 }
 
 // Processing upon start of the application
 void
-NlsrApp::StartApplication ()
+SyncApp::StartApplication ()
 {
   // initialize ndn::App
   ndn::App::StartApplication ();
@@ -81,20 +81,21 @@ NlsrApp::StartApplication ()
   SetRouterName ("router-" +  ss.str());
   NS_LOG_DEBUG ("Starting ... Router: " << GetRouterName ());
 
-  Simulator::Schedule (Seconds (0.0), &NlsrApp::GenerateNewUpdate, this);
-  Simulator::Schedule (Seconds (0.1), &NlsrApp::PeriodicalSyncInterest, this);
+  Simulator::Schedule (Seconds (0.0), &SyncApp::PeriodicalSyncInterest, this);
+
+  Simulator::Schedule (Seconds (1), &SyncApp::GenerateNewUpdate, this);
 }
 
 // Processing when application is stopped
 void
-NlsrApp::StopApplication ()
+SyncApp::StopApplication ()
 {
   // cleanup ndn::App
   ndn::App::StopApplication ();
 }
 
 void
-NlsrApp::SendSyncInterest (uint64_t digest1, uint64_t digest2)
+SyncApp::SendSyncInterest (uint64_t digest1, uint64_t digest2)
 {
   const Ptr<ndn::Interest> interest = BuildSyncInterest (digest1, digest2);
 
@@ -108,23 +109,15 @@ NlsrApp::SendSyncInterest (uint64_t digest1, uint64_t digest2)
 }
 
 void
-NlsrApp::PeriodicalSyncInterest ()
+SyncApp::PeriodicalSyncInterest ()
 {
-  const Ptr<ndn::Interest> interest = BuildSyncInterest (GetCurrentDigest (), 0);
+  SendSyncInterest (GetCurrentDigest (), 0);
 
-  NS_LOG_DEBUG ("Sending Periodical Sync Interest: " << interest->GetName ());
-  
-  // Forward packet to lower (network) layer
-  Simulator::ScheduleNow (&ndn::Face::ReceiveInterest, m_face, interest);
-
-  // Call trace (for logging purposes)
-  m_transmittedInterests (interest, this, m_face);
-
-  Simulator::Schedule (Seconds (5), &NlsrApp::PeriodicalSyncInterest, this);
+  Simulator::Schedule (Seconds (5), &SyncApp::PeriodicalSyncInterest, this);
 }
 
 void
-NlsrApp::SendSyncData (Ptr<ndn::Data> data)
+SyncApp::SendSyncData (Ptr<ndn::Data> data)
 {
   NS_LOG_DEBUG ("Sending Data packet for " << data->GetName ());
 
@@ -136,38 +129,24 @@ NlsrApp::SendSyncData (Ptr<ndn::Data> data)
 }
 
 void
-NlsrApp::SendUpdateSinceThen (uint64_t digest)
+SyncApp::SendUpdateInbetween (uint64_t digest1, uint64_t digest2)
 {
-  Ptr<LsuNameList> lsuNameList = Create<LsuNameList> ();
-  GetUpdateSinceThen (digest, lsuNameList->Get ());
+  Ptr<NameListHeader> lsuNameList = Create<NameListHeader> ();
+  if (GetUpdateInbetween (digest1, digest2, lsuNameList->Get ()) == false)
+    return;
 
   Ptr<Packet> packet = Create<Packet> ();
   packet->AddHeader (*lsuNameList);
 
   Ptr<ndn::Data> data = Create<ndn::Data> (packet);
-  data->SetName (MakeSyncName (digest, GetCurrentDigest ()));
-
-  SendSyncData (data);
-}
-
-void
-NlsrApp::SendUpdateByThen (uint64_t digest)
-{
-  Ptr<LsuNameList> lsuNameList = Create<LsuNameList> ();
-  GetUpdateByThen (digest, lsuNameList->Get ());
-
-  Ptr<Packet> packet = Create<Packet> ();
-  packet->AddHeader (*lsuNameList);
-
-  Ptr<ndn::Data> data = Create<ndn::Data> (packet);
-  data->SetName (MakeSyncName (INITIAL_DIGEST, digest));
+  data->SetName (MakeSyncName (digest1, digest2));
 
   SendSyncData (data);
 }
 
 // Callback that will be called when Interest arrives
 void
-NlsrApp::OnInterest (Ptr<const ndn::Interest> interest)
+SyncApp::OnInterest (Ptr<const ndn::Interest> interest)
 {
   NS_LOG_DEBUG ("Receive Interest packet for " << interest->GetName ());
 
@@ -183,24 +162,23 @@ NlsrApp::OnInterest (Ptr<const ndn::Interest> interest)
 
   if (digest2 == 0) {
     NS_LOG_DEBUG ("Sync Request! " << digest1);
-    if (IsCurrentDigest (digest1)) {
+    if (GetCurrentDigest () == digest1) {
       NS_LOG_DEBUG ("============= Synced! ============" << digest1);
       SetOutstandingDigest (digest1);
     } else {
       if (IsDigestInLog (digest1)) {
-        NS_LOG_DEBUG ("Is In Log! " << digest1);
-        SendUpdateSinceThen (digest1);
+        NS_LOG_DEBUG ("============= Is In Log! =============" << digest1);
+        SendUpdateInbetween (digest1, GetCurrentDigest ());
       } else {
         NS_LOG_DEBUG ("============= Not In Log! ============" << digest1);
-        SendSyncInterest (INITIAL_DIGEST, digest1);
+        SendSyncInterest (GetSyncDigest (), digest1);
       }
     }
   } else {
     NS_LOG_DEBUG ("Resync Request! " << digest1 << " " << digest2);
     if (IsDigestInLog (digest2)) {
         NS_LOG_DEBUG ("=========== Resync with Digest: " << digest2);
-        //SendUpdateSinceThen (0);
-        SendUpdateByThen (digest2);
+        SendUpdateInbetween (digest1, digest2);
     } else {
         NS_LOG_DEBUG ("=========== Cannot Resync with Digest: " << digest2);
     } 
@@ -209,21 +187,22 @@ NlsrApp::OnInterest (Ptr<const ndn::Interest> interest)
 
 // Callback that will be called when Data arrives
 void
-NlsrApp::OnData (Ptr<const ndn::Data> data)
-{ 
-
+SyncApp::OnData (Ptr<const ndn::Data> data)
+{
   NS_LOG_DEBUG ("Receiving Data packet for " << data->GetName ());
 
   if ( IsPacketDropped () ) {
     NS_LOG_DEBUG ("Packet loss !");
     return;
   }
+  uint64_t digest1, digest2;
+  GetDigestFromName (data->GetNamePtr (), digest1, digest2);
 
   Ptr<Packet> payload = data->GetPayload ()->Copy ();  
   
   //std::cout << "Content Size is " << payload->GetSize () << std::endl;
 
-  nlsr::LsuNameList nameList;
+  NameListHeader nameList;
   payload->RemoveHeader (nameList);
   nameList.Print(std::cout);
   std::vector<std::string> newNameList;
@@ -244,7 +223,7 @@ NlsrApp::OnData (Ptr<const ndn::Data> data)
 }
 
 void
-NlsrApp::GenerateNewUpdate ()
+SyncApp::GenerateNewUpdate ()
 {
   std::string s;
   std::string old;
@@ -258,23 +237,23 @@ NlsrApp::GenerateNewUpdate ()
 
   OnNewUpdate ();
   UniformVariable rand (1, 2);
-  Simulator::Schedule (Seconds (rand.GetValue ()), &NlsrApp::GenerateNewUpdate, this);
+  Simulator::Schedule (Seconds (rand.GetValue ()), &SyncApp::GenerateNewUpdate, this);
 }
 
 void
-NlsrApp::OnNewUpdate ()
+SyncApp::OnNewUpdate ()
 {
   if (GetOutstandingDigest () == 0) {
     NS_LOG_DEBUG ("No Outstanding Interest");
   } else {
-    SendUpdateSinceThen (GetOutstandingDigest ());
+    SendUpdateInbetween (GetOutstandingDigest (), GetCurrentDigest ());
     SetOutstandingDigest (0);
   }
   SendSyncInterest (GetCurrentDigest(), 0);
 }
 
 const Ptr<ndn::Interest>
-NlsrApp::BuildSyncInterest (uint64_t digest1, uint64_t digest2)
+SyncApp::BuildSyncInterest (uint64_t digest1, uint64_t digest2)
 {
   Ptr<ndn::Name> name = Create<ndn::Name> (SYNC_PREFIX);
   name->appendNumber (digest1);
@@ -286,30 +265,32 @@ NlsrApp::BuildSyncInterest (uint64_t digest1, uint64_t digest2)
   interest->SetNonce            (rand.GetValue ());
   interest->SetName             (name);
   interest->SetInterestLifetime (Seconds (5.0));
+  interest->SetScope            (2);  
 
   return interest;
 }
 
 void
-NlsrApp::SetOutstandingDigest (uint64_t digest)
+SyncApp::SetOutstandingDigest (uint64_t digest)
 {
   m_outstandingDigest = digest;
+  IncreaseCounter (digest);
 }
 
 uint64_t
-NlsrApp::GetOutstandingDigest () const
+SyncApp::GetOutstandingDigest () const
 {
   return m_outstandingDigest;
 }
 
 uint64_t
-NlsrApp::GetNextSequenceNumber ()
+SyncApp::GetNextSequenceNumber ()
 {
   return m_seq++;
 }
 
 bool
-NlsrApp::IsPacketDropped () const
+SyncApp::IsPacketDropped () const
 {
   UniformVariable rand (0, 1);
   double prob = 0;
@@ -317,7 +298,7 @@ NlsrApp::IsPacketDropped () const
 }
 
 Ptr<ndn::Name> 
-NlsrApp::MakeSyncName (uint64_t oldDigest, uint64_t newDigest) const
+SyncApp::MakeSyncName (uint64_t oldDigest, uint64_t newDigest) const
 {
   Ptr<ndn::Name> prefix = Create<ndn::Name> (SYNC_PREFIX);
 
@@ -329,8 +310,8 @@ NlsrApp::MakeSyncName (uint64_t oldDigest, uint64_t newDigest) const
   return prefix;
 }
 
-void
-NlsrApp::GetDigestFromName (Ptr<const ndn::Name> name, uint64_t & digest1, uint64_t & digest2) const
+uint64_t
+SyncApp::GetDigestFromName (Ptr<const ndn::Name> name, uint64_t & digest1, uint64_t & digest2) const
 { 
   NS_ASSERT (name->getPrefix (2).toUri ().compare (SYNC_PREFIX) == 0);
 
@@ -340,19 +321,20 @@ NlsrApp::GetDigestFromName (Ptr<const ndn::Name> name, uint64_t & digest1, uint6
   } else {
     digest2 = 0;
   }
+  return digest1;
 }
 
 const std::string &
-NlsrApp::GetRouterName () const
+SyncApp::GetRouterName () const
 {
   return m_routerName;
 }
 
 void
-NlsrApp::SetRouterName (const std::string & routerName)
+SyncApp::SetRouterName (const std::string & routerName)
 {
   m_routerName = routerName;
 }
 
-} // namespace nlsr
+} // namespace ndn
 } // namespace ns3

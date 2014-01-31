@@ -27,7 +27,7 @@
 NS_LOG_COMPONENT_DEFINE ("NlsrLsu");
 
 namespace ns3 {
-namespace nlsr {
+namespace ndn {
 
 // ========== Class LsuContent ============
 
@@ -37,7 +37,7 @@ uint16_t
 LsuContent::GetAdjacencySize (void) const
 {
   uint16_t size = 0;
-  for ( std::vector<nlsr::LsuContent::NeighborTuple>::const_iterator i = m_adjacency.begin ();
+  for ( std::vector<LsuContent::NeighborTuple>::const_iterator i = m_adjacency.begin ();
         i != m_adjacency.end ();
         i++ ) {
     size += sizeof (i->metric) + sizeof (size) + i->routerName.size(); 
@@ -49,7 +49,7 @@ uint16_t
 LsuContent::GetReachabilitySize (void) const
 {
   uint16_t size = 0;
-  for ( std::vector<nlsr::LsuContent::PrefixTuple>::const_iterator i = m_reachability.begin ();
+  for ( std::vector<LsuContent::PrefixTuple>::const_iterator i = m_reachability.begin ();
         i != m_reachability.end ();
         i++ ) {
     size += sizeof (i->metric) + sizeof (size) + i->prefixName.size(); 
@@ -69,7 +69,7 @@ LsuContent::~LsuContent ()
 TypeId
 LsuContent::GetTypeId (void)
 {
-  static TypeId tid = TypeId ("ns3::nlsr::LsuContent")
+  static TypeId tid = TypeId ("LsuContent")
     .SetParent<Header> ()
     .AddConstructor<LsuContent> ()
   ;
@@ -103,7 +103,7 @@ LsuContent::Print (std::ostream &os) const
   os << "=== LsuContent ===" << std::endl;
   os << "Lifetime:  " << m_lifetime << std::endl;
   os << "AdjacencySize:  " << GetAdjacencySize () << std::endl;
-  for ( std::vector<nlsr::LsuContent::NeighborTuple>::const_iterator neighborTuple = m_adjacency.begin ();
+  for ( std::vector<LsuContent::NeighborTuple>::const_iterator neighborTuple = m_adjacency.begin ();
         neighborTuple != m_adjacency.end();
         neighborTuple++ ) {
     os << "RouterName:  " << neighborTuple->routerName << "  Length:  " << neighborTuple->routerName.size ()
@@ -111,7 +111,7 @@ LsuContent::Print (std::ostream &os) const
   }
 
   os << "ReachabilitySize:  " << GetReachabilitySize () << std::endl;
-  for ( std::vector<nlsr::LsuContent::PrefixTuple>::const_iterator prefixTuple = m_reachability.begin ();
+  for ( std::vector<LsuContent::PrefixTuple>::const_iterator prefixTuple = m_reachability.begin ();
         prefixTuple != m_reachability.end();
         prefixTuple++ ) {
     os << "PrefixName:  " << prefixTuple->prefixName << "  Length:  " << prefixTuple->prefixName.size ()
@@ -128,7 +128,7 @@ LsuContent::Serialize (Buffer::Iterator start) const
   i.WriteHtonU32 (m_lifetime);
 
   i.WriteHtonU16 (GetAdjacencySize ());
-  for ( std::vector<nlsr::LsuContent::NeighborTuple>::const_iterator neighborTuple = m_adjacency.begin ();
+  for ( std::vector<LsuContent::NeighborTuple>::const_iterator neighborTuple = m_adjacency.begin ();
         neighborTuple != m_adjacency.end();
         neighborTuple++ ) {
     i.WriteHtonU16 (neighborTuple->metric);
@@ -137,7 +137,7 @@ LsuContent::Serialize (Buffer::Iterator start) const
   }
 
   i.WriteHtonU16 (GetReachabilitySize ());
-  for ( std::vector<nlsr::LsuContent::PrefixTuple>::const_iterator prefixTuple = m_reachability.begin ();
+  for ( std::vector<LsuContent::PrefixTuple>::const_iterator prefixTuple = m_reachability.begin ();
         prefixTuple != m_reachability.end();
         prefixTuple++ ) {
     i.WriteHtonU16 (prefixTuple->metric);
@@ -264,41 +264,41 @@ LsuContent::AddReachability (const std::string &prefixName, uint16_t metric)
   m_reachability.push_back(prefixTuple);
 }
 
-// ========== Class LsuNameList ============
+// ========== Class NameListHeader ============
 
-NS_OBJECT_ENSURE_REGISTERED (LsuNameList);
+NS_OBJECT_ENSURE_REGISTERED (NameListHeader);
 
-LsuNameList::LsuNameList ()
+NameListHeader::NameListHeader ()
 {
 }
 
-LsuNameList::LsuNameList (const std::vector<std::string> & nameList)
+NameListHeader::NameListHeader (const std::vector<std::string> & nameList)
 {
    std::copy (nameList.begin(), nameList.end (), m_nameList.begin ());
 }
 
-LsuNameList::~LsuNameList ()
+NameListHeader::~NameListHeader ()
 {
 }
 
 TypeId
-LsuNameList::GetTypeId (void)
+NameListHeader::GetTypeId (void)
 {
-  static TypeId tid = TypeId ("ns3::nlsr::LsuNameList")
+  static TypeId tid = TypeId ("NameListHeader")
     .SetParent<Header> ()
-    .AddConstructor<LsuNameList> ()
+    .AddConstructor<NameListHeader> ()
   ;
   return tid;
 }
 
 TypeId
-LsuNameList::GetInstanceTypeId (void) const
+NameListHeader::GetInstanceTypeId (void) const
 {
   return GetTypeId ();
 }
 
 uint32_t
-LsuNameList::GetSerializedSize (void) const
+NameListHeader::GetSerializedSize (void) const
 {
   uint32_t size = 0;
   uint16_t smallSize = 0;
@@ -310,24 +310,23 @@ LsuNameList::GetSerializedSize (void) const
         i++ ) {
     size += sizeof (smallSize) + i->size (); 
   }
-  NS_LOG_DEBUG ("GetSerializedSize LsuNameList: " << size); 
+  NS_LOG_DEBUG ("GetSerializedSize NameListHeader: " << size); 
   return size;
 }
 
 void
-LsuNameList::Print (std::ostream &os) const
+NameListHeader::Print (std::ostream &os) const
 {
-  os << "=== LsuNameList ===" << std::endl;
+  os << "=== NameListHeader ===" << std::endl;
   for ( std::vector<std::string>::const_iterator i = m_nameList.begin ();
         i != m_nameList.end ();
         i++ ) {
-    //os << "LsuName:  " << i->c_str() << "  Length:  " << i->size () << std::endl;
-    os << "LsuName:  " << i->c_str() << std::endl;
+    os << "Name:  " << i->c_str() << std::endl;
   }
 }
 
 void
-LsuNameList::Serialize (Buffer::Iterator start) const
+NameListHeader::Serialize (Buffer::Iterator start) const
 {
   Buffer::Iterator i = start;
   i.WriteHtonU32 (GetSerializedSize () - sizeof (uint32_t));
@@ -341,12 +340,12 @@ LsuNameList::Serialize (Buffer::Iterator start) const
 }
 
 uint32_t
-LsuNameList::Deserialize (Buffer::Iterator start)
+NameListHeader::Deserialize (Buffer::Iterator start)
 {
 
   uint32_t messageSize = start.ReadNtohU32 ();
 
-  //NS_LOG_DEBUG ("Deserialize LsuNameList 1:" << messageSize); 
+  //NS_LOG_DEBUG ("Deserialize NameListHeader 1:" << messageSize); 
 
   uint32_t leftSize = messageSize;
   Buffer::Iterator i = start;
@@ -378,21 +377,21 @@ LsuNameList::Deserialize (Buffer::Iterator start)
 }
 
 const std::vector<std::string> &
-LsuNameList::GetNameList () const
+NameListHeader::GetNameList () const
 {
   return m_nameList;
 }
 
 std::vector<std::string> &
-LsuNameList::Get ()
+NameListHeader::Get ()
 {
   return m_nameList;
 }
 
 void
-LsuNameList::AddName (const std::string &lsuName)
+NameListHeader::AddName (const std::string &name)
 {
-  m_nameList.push_back(lsuName);
+  m_nameList.push_back(name);
 }
  
 // ========== Class HelloData ============
@@ -410,7 +409,7 @@ HelloData::~HelloData ()
 TypeId
 HelloData::GetTypeId (void)
 {
-  static TypeId tid = TypeId ("ns3::nlsr::HelloData")
+  static TypeId tid = TypeId ("HelloData")
     .SetParent<Header> ()
     .AddConstructor<HelloData> ()
   ;
@@ -592,6 +591,6 @@ HelloData::SetVersion (const uint8_t & version)
   m_version = version;
 }
 
-} // namespace nlsr
+} // namespace ndn
 } // namespace ns3
 

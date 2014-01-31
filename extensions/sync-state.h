@@ -18,46 +18,48 @@
  * Author: Yu Zhang <yuzhang@hit.edu.cn> 
  */
 
-// nlsr-state.h
+// sync-state.h
 
-#ifndef NLSR_SYNC_H
-#define NLSR_SYNC_H
+#ifndef _SYNC_STATE_H
+#define _SYNC_STATE_H
 
 #include "ns3/header.h"
 #include "ns3/ndn-data.h"
 
 namespace ns3 {
-namespace nlsr {
+namespace ndn {
 
 /// ========== Class NlsrSync ============
 
 static const uint64_t INITIAL_DIGEST = 7036231242510567892; //  ns3::Hash64 ("YUZHANG")
-typedef std::vector<std::string> NameList;
-typedef std::map<std::string, uint64_t> IdSeqMap;
 
 struct LogTuple
 {
   uint64_t digest;
   std::string newName;
   std::string oldName;
+  uint32_t counter;
 
   LogTuple (uint64_t d, std::string n, std::string o)
-  : digest (d), newName (n), oldName (o)
+  : digest (d), newName (n), oldName (o), counter (0)
   {}
 
   LogTuple ()
+  : counter (0)
   {}
 };
 
+typedef std::vector<std::string> NameList;
+typedef std::map<std::string, uint64_t> IdSeqMap;
 typedef std::list<LogTuple> DigestLog;
 
-class NlsrSync {
+class SyncState {
 
 public:
 
-  NlsrSync ();
+  SyncState ();
 
-  virtual ~NlsrSync ();
+  virtual ~SyncState ();
 
   static TypeId
   GetTypeId (void);
@@ -75,10 +77,39 @@ public:
   GetCurrentDigest () const;
 
   bool
-  IsCurrentDigest (uint64_t digest) const;
+  IsDigestInLog (uint64_t digest) const;
+
+  uint64_t
+  GetSyncDigest () const;
 
   bool
-  IsDigestInLog (uint64_t digest) const;
+  IncreaseCounter (uint64_t digest);
+
+  bool
+  GetUpdateInbetween (uint64_t oldDigest, uint64_t newDigest, NameList & nameList) const;
+
+  bool
+  Update (const std::string & newName, std::string & oldName);
+
+private:
+
+  bool
+  IsCurrentDigest (uint64_t digest) const;
+
+  void
+  AddToLog (uint64_t digest, const std::string & newName, const std::string & oldName);
+
+  uint64_t
+  IncrementalHash (const std::string & newName, const std::string & oldName) const;
+
+  DigestLog::const_iterator
+  FindDigestInLog (uint64_t digest) const;
+
+  DigestLog::iterator
+  FindDigestInLog (uint64_t digest);
+
+  void
+  GetAllName (NameList & nameList) const;
 
   bool
   GetUpdateSinceThen (uint64_t digest, NameList & nameList) const;
@@ -86,26 +117,13 @@ public:
   bool
   GetUpdateByThen (uint64_t digest, NameList & nameList) const;
 
-  void
-  GetAllName (NameList & nameList) const;
-
-  bool
-  Update (const std::string & newName, std::string & oldName);
-
-private:
-  void
-  AddToLog (uint64_t digest, const std::string & newName, const std::string & oldName);
-
-  uint64_t
-  IncrementalHash (const std::string & newName, const std::string & oldName) const;
-
 private:
   DigestLog m_digestLog;
   IdSeqMap m_idSeqMap;
-}; // Class NlsrSync
+}; // Class SyncState
 
 
-} // namespace nlsr
+} // namespace ndn
 } // namespace ns3
 
-#endif /* NLSR_SYNC_H */
+#endif /* _SYNC_STATE_H */

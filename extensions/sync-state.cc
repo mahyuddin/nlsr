@@ -20,34 +20,36 @@
 
 // nlsr-lsdb.cc
 
-#include "nlsr-sync.h"
+#include "sync-state.h"
 #include "ns3/assert.h"
 #include "ns3/log.h"
 
-NS_LOG_COMPONENT_DEFINE ("NlsrSync");
+NS_LOG_COMPONENT_DEFINE ("SyncState");
 
 namespace ns3 {
-namespace nlsr {
+namespace ndn {
 
-// ========== Class NlsrSync ============
+// ========== Class SyncState ============
 
-NlsrSync::NlsrSync ()
+#define MAX_LOG_LENGTH 10000
+
+SyncState::SyncState ()
 { 
 }
 
-NlsrSync::~NlsrSync ()
+SyncState::~SyncState ()
 {
 }
 
 TypeId
-NlsrSync::GetTypeId (void)
+SyncState::GetTypeId (void)
 {
-  static TypeId tid = TypeId ("ns3::nlsr::NlsrSync");
+  static TypeId tid = TypeId ("SyncState");
   return tid;
 }
 
 TypeId
-NlsrSync::GetInstanceTypeId (void) const
+SyncState::GetInstanceTypeId (void) const
 {
   return GetTypeId ();
 }
@@ -55,7 +57,7 @@ NlsrSync::GetInstanceTypeId (void) const
 /// ========================= 
 
 std::string &
-NlsrSync::IdSeqToName (const std::string id, uint64_t seq, std::string & name)
+SyncState::IdSeqToName (const std::string id, uint64_t seq, std::string & name)
 {
   Ptr<ndn::Name> s = Create<ndn::Name> (id);
 
@@ -66,7 +68,7 @@ NlsrSync::IdSeqToName (const std::string id, uint64_t seq, std::string & name)
 }
 
 void
-NlsrSync::NameToIdSeq (const std::string name, std::string & id, uint64_t & seq)
+SyncState::NameToIdSeq (const std::string name, std::string & id, uint64_t & seq)
 {
   Ptr<ndn::Name> n = Create<ndn::Name> (name);
   id = n->getPrefix (n->size () - 1).toUri ();
@@ -74,33 +76,51 @@ NlsrSync::NameToIdSeq (const std::string name, std::string & id, uint64_t & seq)
 }
 
 uint64_t
-NlsrSync::GetCurrentDigest () const
+SyncState::GetCurrentDigest () const
 {
   return m_digestLog.empty ()?  INITIAL_DIGEST : m_digestLog.front ().digest;
 }
 
 bool
-NlsrSync::IsCurrentDigest (uint64_t digest) const
+SyncState::IsCurrentDigest (uint64_t digest) const
 {
   return (digest == GetCurrentDigest () ? true : false);
 }
 
 bool
-NlsrSync::IsDigestInLog (uint64_t digest) const
+SyncState::IsDigestInLog (uint64_t digest) const
 {
-  for (DigestLog::const_iterator i = m_digestLog.begin ();
+  return (FindDigestInLog (digest) != m_digestLog.end ());
+}
+
+uint64_t
+SyncState::GetSyncDigest () const
+{
+ for (DigestLog::const_iterator i = m_digestLog.begin ();
        i != m_digestLog.end ();
        i++)
   {
-    if (digest == i->digest) {
-      return true;
+    if (i->counter > 1) {
+      return i->digest;
     }
+  }
+  return INITIAL_DIGEST; 
+}
+
+bool
+SyncState::IncreaseCounter (uint64_t digest)
+{
+  DigestLog::iterator i = FindDigestInLog (digest);
+  if (i != m_digestLog.end ())
+  {
+      i->counter ++;
+      return true;
   }
   return false;
 }
 
 uint64_t
-NlsrSync::IncrementalHash (const std::string & newName, const std::string & oldName) const
+SyncState::IncrementalHash (const std::string & newName, const std::string & oldName) const
 {
   if (oldName == "") {
     return GetCurrentDigest() ^ ns3::Hash64(newName);
@@ -110,19 +130,19 @@ NlsrSync::IncrementalHash (const std::string & newName, const std::string & oldN
 }
 
 void
-NlsrSync::AddToLog (uint64_t digest, const std::string & newName, const std::string & oldName)
+SyncState::AddToLog (uint64_t digest, const std::string & newName, const std::string & oldName)
 {
   LogTuple logTuple (digest, newName, oldName);
   m_digestLog.push_front (logTuple);
   NS_LOG_DEBUG ("digest: " << digest << "lsuName: " << newName << "oldName: " << oldName);
 
-  if (m_digestLog.size () > 10000) {
+  if (m_digestLog.size () > MAX_LOG_LENGTH) {
     m_digestLog.pop_back ();
   }
 }
 
 void
-NlsrSync::GetAllName (NameList & nameList) const
+SyncState::GetAllName (NameList & nameList) const
 {
   std::string str;
   for (IdSeqMap::const_iterator i = m_idSeqMap.begin ();
@@ -134,32 +154,12 @@ NlsrSync::GetAllName (NameList & nameList) const
 }
 
 bool
-NlsrSync::GetUpdateSinceThen (uint64_t digest, NameList & nameList) const
+SyncState::GetUpdateByThen (uint64_t digest, NameList & nameList) const
 {
-  if (digest == INITIAL_DIGEST) {
+  if (digest == GetCurrentDigest ()) {
     GetAllName (nameList);
     return true;
   } 
-    
-  if (IsDigestInLog (digest) == false) {
-    return false;
-  }
-  for (DigestLog::const_iterator i = m_digestLog.begin ();
-       i != m_digestLog.end ();
-       i++)
-  {
-    if (digest != i->digest) {
-      nameList.push_back (i->newName);
-    } else {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool
-NlsrSync::GetUpdateByThen (uint64_t digest, NameList & nameList) const
-{
   if (IsDigestInLog (digest) == false) {
     return false;
   }
@@ -194,7 +194,55 @@ NlsrSync::GetUpdateByThen (uint64_t digest, NameList & nameList) const
 }
 
 bool
-NlsrSync::Update (const std::string & newName, std::string & oldName)
+SyncState::GetUpdateInbetween (uint64_t oldDigest, uint64_t newDigest, NameList & nameList) const
+{
+  if (oldDigest == INITIAL_DIGEST) {
+    return GetUpdateByThen (newDigest, nameList);
+  }
+
+  // To-Do: there must be more efficient way
+  std::map<std::string, bool > nameMap;  // the 2nd 'bool' is only a placeholder
+
+  DigestLog::const_iterator i = m_digestLog.begin ();
+  for (; i != m_digestLog.end (); i++)
+  {
+    if (newDigest == i->digest) break;
+  }
+  DigestLog::const_iterator j = i;
+  for (; j != m_digestLog.end (); j++)
+  {
+    if (oldDigest == j->digest) break;
+    nameMap[j->newName] = true;
+  }
+  if (j == m_digestLog.end ()) {
+    return false;
+  }
+
+  for (; j != i; j--) {
+    nameMap.erase (j->oldName);
+  }
+  nameMap.erase (j->oldName);
+  for (std::map<std::string, bool >::const_iterator i = nameMap.begin ();
+       i != nameMap.end ();
+       i++)
+  {
+    nameList.push_back (i->first);
+  }
+  return true;
+}
+
+bool
+SyncState::GetUpdateSinceThen (uint64_t digest, NameList & nameList) const
+{
+  if (digest == INITIAL_DIGEST) {
+    GetAllName (nameList);
+    return true;
+  } 
+  return GetUpdateInbetween (digest, GetCurrentDigest (), nameList);
+}
+
+bool
+SyncState::Update (const std::string & newName, std::string & oldName)
 {
   std::string id;
   uint64_t seq;
@@ -220,5 +268,35 @@ NlsrSync::Update (const std::string & newName, std::string & oldName)
   return true;
 }
 
-} // namespace nlsr
+DigestLog::const_iterator
+SyncState::FindDigestInLog (uint64_t digest) const
+{
+  DigestLog::const_iterator i = m_digestLog.begin ();
+  for (;
+       i != m_digestLog.end ();
+       i++)
+  {
+    if (digest == i->digest) {
+      break;
+    }
+  }
+  return i;
+}
+
+DigestLog::iterator
+SyncState::FindDigestInLog (uint64_t digest)
+{
+  DigestLog::iterator i = m_digestLog.begin ();
+  for (;
+       i != m_digestLog.end ();
+       i++)
+  {
+    if (digest == i->digest) {
+      break;
+    }
+  }
+  return i;
+}
+
+} // namespace ndn
 } // namespace ns3

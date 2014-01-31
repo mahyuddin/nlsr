@@ -20,15 +20,15 @@
 
 // nlsr-app.h
 
-#ifndef NLSR_APP_H_
-#define NLSR_APP_H_
+#ifndef SYNC_APP_H_
+#define SYNC_APP_H_
 
-#include "nlsr-sync.h"
+#include "sync-state.h"
 #include "nlsr-lsu.h"
 #include "ns3/ndn-app.h"
 
 namespace ns3 {
-namespace nlsr {
+namespace ndn {
 
 /**
  * @brief A simple custom application
@@ -44,11 +44,11 @@ namespace nlsr {
 static const std::string SYNC_PREFIX = "/nslr/sync";
 
 
-class NlsrApp : public ndn::App, NlsrSync
+class SyncApp : public ndn::App, SyncState
 {
 
 public:
-  NlsrApp ();
+  SyncApp ();
 
   // register NS-3 type "NlsrApp"
   static TypeId
@@ -70,14 +70,7 @@ public:
   virtual void
   OnData (Ptr<const ndn::Data> data);
 
-  const Ptr<ndn::Interest>
-  BuildSyncInterest (uint64_t digest1, uint64_t digest2);
-
-  void
-  SendUpdateSinceThen (uint64_t digest);
-
-  void
-  SendUpdateByThen (uint64_t digest);
+private:
 
   void
   SendSyncInterest (uint64_t oldDigest, uint64_t newDigest);
@@ -86,15 +79,25 @@ public:
   SendSyncData (Ptr<ndn::Data> data);
 
   void
-  GenerateNewUpdate ();
-
-  void
-  OnNewUpdate ();
+  SendUpdateInbetween (uint64_t digest1, uint64_t digest2);
 
   void
   PeriodicalSyncInterest ();
 
-private:
+  const Ptr<ndn::Interest>
+  BuildSyncInterest (uint64_t digest1, uint64_t digest2);
+
+  Ptr<ndn::Name> 
+  MakeSyncName (uint64_t oldDigest, uint64_t newDigest) const;
+
+  uint64_t
+  GetDigestFromName (Ptr<const ndn::Name> name, uint64_t & digest1, uint64_t & digest2) const;
+
+  void
+  GenerateNewUpdate ();
+
+  void
+  OnNewUpdate ();
 
   void
   SetOutstandingDigest (uint64_t digest);
@@ -102,32 +105,27 @@ private:
   uint64_t
   GetOutstandingDigest () const;
 
-  uint64_t
-  GetNextSequenceNumber ();
-
-  bool
-  IsPacketDropped () const;
-
-  Ptr<ndn::Name> 
-  MakeSyncName (uint64_t oldDigest, uint64_t newDigest) const;
-
-  void
-  GetDigestFromName (Ptr<const ndn::Name> name, uint64_t & digest1, uint64_t & digest2) const;
-
   const std::string &
   GetRouterName () const;
 
   void
   SetRouterName (const std::string & routerName);
 
+  uint64_t
+  GetNextSequenceNumber ();
+
+  bool
+  IsPacketDropped () const;
+
 private:
   std::string m_routerName;
   uint64_t m_seq;
   uint64_t m_outstandingDigest;
+  uint64_t m_lastcheckpoint;
 
 };
 
 } // namespace nlsr
 } // namespace ns3
 
-#endif // NLSR_APP_H_
+#endif // SYNC_APP_H_

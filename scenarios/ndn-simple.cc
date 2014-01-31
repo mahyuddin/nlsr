@@ -81,7 +81,7 @@ main (int argc, char *argv[])
 
   // Installing applications
 
-  ndn::AppHelper consumerHelper ("NlsrApp");
+  ndn::AppHelper consumerHelper ("SyncApp");
   ApplicationContainer app0 = consumerHelper.Install (nodes.Get (0)); 
   ApplicationContainer app1 = consumerHelper.Install (nodes.Get (1));
   ApplicationContainer app2 = consumerHelper.Install (nodes.Get (2));
