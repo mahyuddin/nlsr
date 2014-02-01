@@ -34,6 +34,8 @@
 #include "ns3/ndn-fib.h"
 #include "ns3/random-variable.h"
 
+#include <sstream>
+
 NS_LOG_COMPONENT_DEFINE ("SyncApp");
 
 namespace ns3 {
@@ -94,93 +96,42 @@ SyncApp::StopApplication ()
   ndn::App::StopApplication ();
 }
 
-void
-SyncApp::SendSyncInterest (uint64_t digest1, uint64_t digest2)
-{
-  const Ptr<ndn::Interest> interest = BuildSyncInterest (digest1, digest2);
-
-  NS_LOG_DEBUG ("Sending Sync Interest: " << interest->GetName ());
-  
-  // Forward packet to lower (network) layer
-  Simulator::ScheduleNow (&ndn::Face::ReceiveInterest, m_face, interest);
-
-  // Call trace (for logging purposes)
-  m_transmittedInterests (interest, this, m_face);
-}
-
-void
-SyncApp::PeriodicalSyncInterest ()
-{
-  SendSyncInterest (GetCurrentDigest (), 0);
-
-  Simulator::Schedule (Seconds (5), &SyncApp::PeriodicalSyncInterest, this);
-}
-
-void
-SyncApp::SendSyncData (Ptr<ndn::Data> data)
-{
-  NS_LOG_DEBUG ("Sending Data packet for " << data->GetName ());
-
-  // Forward packet to lower (network) layer
-  Simulator::ScheduleNow (&ndn::Face::ReceiveData, m_face, data);
-
-  // Call trace (for logging purposes)
-  m_transmittedDatas (data, this, m_face);
-}
-
-void
-SyncApp::SendUpdateInbetween (uint64_t digest1, uint64_t digest2)
-{
-  Ptr<NameListHeader> lsuNameList = Create<NameListHeader> ();
-  if (GetUpdateInbetween (digest1, digest2, lsuNameList->Get ()) == false)
-    return;
-
-  Ptr<Packet> packet = Create<Packet> ();
-  packet->AddHeader (*lsuNameList);
-
-  Ptr<ndn::Data> data = Create<ndn::Data> (packet);
-  data->SetName (MakeSyncName (digest1, digest2));
-
-  SendSyncData (data);
-}
-
 // Callback that will be called when Interest arrives
 void
 SyncApp::OnInterest (Ptr<const ndn::Interest> interest)
 {
-  NS_LOG_DEBUG ("Receive Interest packet for " << interest->GetName ());
-
-  if ( IsPacketDropped () ) {
-    NS_LOG_DEBUG ("Packet lost !");
-    return;
-  }
-
   Ptr<const ndn::Name> name = interest->GetNamePtr ();
   uint64_t digest1 = 0;
   uint64_t digest2 = 0;
   GetDigestFromName (name, digest1, digest2);
 
+  NS_LOG_DEBUG ("Receive Interest packet: " << digest1 << " " << digest2);
+
+  if ( IsPacketDropped () ) { NS_LOG_DEBUG ("Interest Packet Lost !"); return; }
+
   if (digest2 == 0) {
-    NS_LOG_DEBUG ("Sync Request! " << digest1);
     if (GetCurrentDigest () == digest1) {
       NS_LOG_DEBUG ("============= Synced! ============" << digest1);
       SetOutstandingDigest (digest1);
     } else {
       if (IsDigestInLog (digest1)) {
-        NS_LOG_DEBUG ("============= Is In Log! =============" << digest1);
+        NS_LOG_DEBUG ("============= Known! =============" << digest1);
         SendUpdateInbetween (digest1, GetCurrentDigest ());
       } else {
-        NS_LOG_DEBUG ("============= Not In Log! ============" << digest1);
+        NS_LOG_DEBUG ("============= Unknown! ============" << digest1);
+        if (digest1 == GetUnknownDigest ()) { // This is a temporary solution, may lead to a deadlock
+          SendSyncInterest (INITIAL_DIGEST, digest1);
+        }
+        SetUnknownDigest (digest1);
         SendSyncInterest (GetSyncDigest (), digest1);
       }
     }
   } else {
-    NS_LOG_DEBUG ("Resync Request! " << digest1 << " " << digest2);
     if (IsDigestInLog (digest2)) {
-        NS_LOG_DEBUG ("=========== Resync with Digest: " << digest2);
+        NS_LOG_DEBUG ("=========== Resynced! ============" << digest1 << " " << digest2);
         SendUpdateInbetween (digest1, digest2);
     } else {
-        NS_LOG_DEBUG ("=========== Cannot Resync with Digest: " << digest2);
+        NS_LOG_DEBUG ("=========== Cannot Resync! ===========" << digest1 << " " << digest2);
     } 
   }
 }
@@ -189,19 +140,17 @@ SyncApp::OnInterest (Ptr<const ndn::Interest> interest)
 void
 SyncApp::OnData (Ptr<const ndn::Data> data)
 {
-  NS_LOG_DEBUG ("Receiving Data packet for " << data->GetName ());
 
   if ( IsPacketDropped () ) {
-    NS_LOG_DEBUG ("Packet loss !");
+    NS_LOG_DEBUG ("Data Packet Lost!");
     return;
   }
   uint64_t digest1, digest2;
   GetDigestFromName (data->GetNamePtr (), digest1, digest2);
 
-  Ptr<Packet> payload = data->GetPayload ()->Copy ();  
-  
-  //std::cout << "Content Size is " << payload->GetSize () << std::endl;
+  NS_LOG_DEBUG ("Receiving Data packet: " << digest1 <<  " " << digest2);
 
+  Ptr<Packet> payload = data->GetPayload ()->Copy ();    
   NameListHeader nameList;
   payload->RemoveHeader (nameList);
   nameList.Print(std::cout);
@@ -223,17 +172,70 @@ SyncApp::OnData (Ptr<const ndn::Data> data)
 }
 
 void
+SyncApp::SendSyncInterest (uint64_t digest1, uint64_t digest2)
+{
+  const Ptr<ndn::Interest> interest = BuildSyncInterest (digest1, digest2);
+
+  NS_LOG_DEBUG ("Sending Sync Interest: " << digest1 << " " << digest2);
+  
+  // Forward packet to lower (network) layer
+  Simulator::ScheduleNow (&ndn::Face::ReceiveInterest, m_face, interest);
+
+  // Call trace (for logging purposes)
+  m_transmittedInterests (interest, this, m_face);
+}
+
+void
+SyncApp::PeriodicalSyncInterest ()
+{
+  SendSyncInterest (GetCurrentDigest (), 0);
+
+  Simulator::Schedule (Seconds (3), &SyncApp::PeriodicalSyncInterest, this);
+}
+
+void
+SyncApp::SendSyncData (Ptr<ndn::Data> data)
+{
+  //NS_LOG_DEBUG ("Sending Data packet for " << data->GetName ());
+
+  // Forward packet to lower (network) layer
+  Simulator::ScheduleNow (&ndn::Face::ReceiveData, m_face, data);
+
+  // Call trace (for logging purposes)
+  m_transmittedDatas (data, this, m_face);
+}
+
+void
+SyncApp::SendUpdateInbetween (uint64_t digest1, uint64_t digest2)
+{
+  Ptr<NameListHeader> lsuNameList = Create<NameListHeader> ();
+  if (GetUpdateInbetween (digest1, digest2, lsuNameList->Get ()) == false)
+    return;
+
+  Ptr<Packet> packet = Create<Packet> ();
+  packet->AddHeader (*lsuNameList);
+
+  Ptr<ndn::Data> data = Create<ndn::Data> (packet);
+  data->SetName (MakeSyncName (digest1, digest2));
+  NS_LOG_DEBUG ("Sending Data:" << digest1 << " " << digest2);
+
+  SendSyncData (data);
+}
+
+/// ========================================
+
+void
 SyncApp::GenerateNewUpdate ()
 {
   std::string s;
   std::string old;
-  IdSeqToName ("/" + GetRouterName () + "/lsu1" , GetNextSequenceNumber (), s);
+
+  std::stringstream out;
+  out << GetNextSequenceNumber ();
+
+  IdSeqToName ("/" + GetRouterName () + "/unit-" + out.str(), 1, s);
   Update (s, old);
   NS_LOG_DEBUG ("New Updates: " << s << " New Digest: " << GetCurrentDigest ());
-
-  IdSeqToName ("/" + GetRouterName () + "/lsu2", GetNextSequenceNumber (), s);
-  Update (s, old);
-  NS_LOG_DEBUG ("New Updates: " << s << " New Digest: " << GetCurrentDigest ()); 
 
   OnNewUpdate ();
   UniformVariable rand (1, 2);
@@ -293,7 +295,7 @@ bool
 SyncApp::IsPacketDropped () const
 {
   UniformVariable rand (0, 1);
-  double prob = 0;
+  double prob = PACKET_LOSS_RATE;
   return rand.GetValue () >= prob ? false : true;
 }
 
@@ -313,11 +315,11 @@ SyncApp::MakeSyncName (uint64_t oldDigest, uint64_t newDigest) const
 uint64_t
 SyncApp::GetDigestFromName (Ptr<const ndn::Name> name, uint64_t & digest1, uint64_t & digest2) const
 { 
-  NS_ASSERT (name->getPrefix (2).toUri ().compare (SYNC_PREFIX) == 0);
+  NS_ASSERT (name->getPrefix (SYNC_PREFIX_SIZE).toUri ().compare (SYNC_PREFIX) == 0);
 
-  digest1 = name->get (2).toNumber ();  
-  if (name->size () == 4) {
-    digest2 = name->get (3).toNumber ();
+  digest1 = name->get (SYNC_PREFIX_SIZE).toNumber ();  
+  if (name->size () == SYNC_PREFIX_SIZE + 2) {
+    digest2 = name->get (SYNC_PREFIX_SIZE + 1).toNumber ();
   } else {
     digest2 = 0;
   }
@@ -334,6 +336,18 @@ void
 SyncApp::SetRouterName (const std::string & routerName)
 {
   m_routerName = routerName;
+}
+
+uint64_t
+SyncApp::GetUnknownDigest () const
+{
+  return m_unknownDigest;
+}
+
+void
+SyncApp::SetUnknownDigest (uint64_t digest)
+{
+  m_unknownDigest = digest;
 }
 
 } // namespace ndn

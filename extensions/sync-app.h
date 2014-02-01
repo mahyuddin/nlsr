@@ -23,8 +23,8 @@
 #ifndef SYNC_APP_H_
 #define SYNC_APP_H_
 
-#include "sync-state.h"
 #include "nlsr-lsu.h"
+#include "sync-state.h"
 #include "ns3/ndn-app.h"
 
 namespace ns3 {
@@ -41,8 +41,9 @@ namespace ndn {
  * When an Interest is received, it is replied with a ContentObject with 1024-byte fake payload
  */
 
-static const std::string SYNC_PREFIX = "/nslr/sync";
-
+static const std::string SYNC_PREFIX = "/ndn/sync";
+static const uint16_t SYNC_PREFIX_SIZE = 2;
+static const double PACKET_LOSS_RATE = 0.1;
 
 class SyncApp : public ndn::App, SyncState
 {
@@ -117,11 +118,17 @@ private:
   bool
   IsPacketDropped () const;
 
+  void
+  SetUnknownDigest (uint64_t digest);
+
+  uint64_t
+  GetUnknownDigest () const;
+
 private:
   std::string m_routerName;
   uint64_t m_seq;
   uint64_t m_outstandingDigest;
-  uint64_t m_lastcheckpoint;
+  uint64_t m_unknownDigest;
 
 };
 

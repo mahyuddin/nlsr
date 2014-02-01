@@ -100,11 +100,11 @@ SyncState::GetSyncDigest () const
        i != m_digestLog.end ();
        i++)
   {
-    if (i->counter > 1) {
+    if (i->counter > 0) {
       return i->digest;
     }
   }
-  return INITIAL_DIGEST; 
+  return INITIAL_DIGEST;
 }
 
 bool
